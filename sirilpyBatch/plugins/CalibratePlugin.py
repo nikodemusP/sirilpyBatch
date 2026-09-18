@@ -1,39 +1,33 @@
 import shutil
 from pathlib import Path
 from dataclasses import dataclass
-from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry, PluginItem
+from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry, CheckboxItem, IntItem, PluginItem, SeparatorItem
 from sirilpy import LogColor
 
 calibrate_items = [
-    PluginItem(
-        kind="checkbox",  
+    CheckboxItem(
         key="cfa",          
         label="CFA format",
         colspan=2,
         default=False),
-    PluginItem(
-        kind="checkbox",  
+    CheckboxItem(
         key="equalize_cfa", 
         label="equalize CFA", 
         colspan=2,
         default=False),
-    PluginItem(
-        kind="checkbox",  
+    CheckboxItem(
         key="debayer",      
         label="Debayer",      
         colspan=2,
         default=False),
-    PluginItem(
-        kind="separator", 
+    SeparatorItem(
         key="sep1"),
-    PluginItem(
-        kind="int",       
+    IntItem(
         key="sigma_low",    
         label="Sigma Low",    
         colspan=2,
         default=3),
-    PluginItem(
-        kind="int",       
+    IntItem(
         key="sigma_high",   
         label="Sigma High",   
         colspan=2,

@@ -18,7 +18,7 @@ Key building blocks:
     Batch                - the main window tying everything together.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import importlib.util
 import os
 import pathlib
@@ -125,23 +125,57 @@ class PluginItem:
     A plugin describes its UI as a list of ``PluginItem`` objects; ``PluginConfigBox``
     turns each one into the matching Qt widget (see ``_create_item_widget``).
     """
-
-    kind: str  # "checkbox" | "slider" | "int" | "float" | "text" | "separator"
-    key: str  # internal key used to read/write this item's value
-
+    key: str  = None # internal key used to read/write this item's value
     label: str = None  # label for the widget
+    labelPos: str = "LEFT"
     default: Any = None
-    minimum: float = 0
-    maximum: float = 100
-    step: float = 1
-    decimals: int = 2  # used only by "float" items
     tooltip: str = ""
     value: Any = None
     colspan: int = 1  # how many grid columns this item's cell should occupy (e.g. for a
     # wide text field); clamped to the box's total column count and will
     # wrap to a new row if it doesn't fit in the remaining space.
 
+@dataclass
+class SeparatorItem(PluginItem):
+    pass
 
+
+@dataclass
+class CheckboxItem(PluginItem):
+    labelPos: str = "RIGHT"
+    pass
+
+@dataclass
+class NumberItem(PluginItem):
+    step: float = 1
+    minimum: float = 0
+    maximum: float = 100
+    pass
+
+@dataclass
+class SliderItem(NumberItem):
+    step: float = 1
+    minimum: float = 0
+    maximum: float = 100
+    pass
+
+@dataclass
+class IntItem(NumberItem):
+    pass
+
+@dataclass
+class FloatItem(NumberItem):
+    decimals: int = 2  # used only by "float" items
+    pass
+
+@dataclass
+class TextItem(PluginItem):
+    pass
+
+@dataclass
+class ComboBoxItem(PluginItem):
+    values: list[Any] = field(default_factory=list)
+    
 # ------------------------------------------------------------------------------------------
 class PluginConfigBox(QGroupBox):
     """
@@ -208,7 +242,7 @@ class PluginConfigBox(QGroupBox):
 
         if self.items:
             for item in self.items:
-                if item.kind == "separator":
+                if isinstance(item, SeparatorItem):
                     # Start the separator on its own row, even if the current
                     # row isn't full yet.
                     if column != 0:
@@ -247,11 +281,27 @@ class PluginConfigBox(QGroupBox):
                 cell.setSpacing(6)
 
                 label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
-                widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                if isinstance(widget, QCheckBox):
+                    widget.setSizePolicy(
+                        QSizePolicy.Policy.Fixed,
+                        QSizePolicy.Policy.Fixed,
+                    )
+                else:
+                    widget.setSizePolicy(
+                        QSizePolicy.Policy.Expanding,
+                        QSizePolicy.Policy.Fixed,
+                    )
 
-                cell.addWidget(label)
-                cell.addWidget(widget, 1)
-
+                label_position = (item.labelPos or "LEFT").upper()
+                if label_position == "RIGHT":
+                    cell.addWidget(widget)
+                    cell.addSpacing(4)
+                    cell.addWidget(label)
+                    cell.addStretch(1)
+                else:
+                    cell.addWidget(label)
+                    cell.addWidget(widget, 1)
+                    
                 container = QWidget()
                 container.setLayout(cell)
 
@@ -297,7 +347,7 @@ class PluginConfigBox(QGroupBox):
         """
 
         # --------------------------------------------------------------
-        if item.kind == "checkbox":
+        if isinstance(item, CheckboxItem):
             widget = QCheckBox()
             widget.setChecked(bool(item.default if item.default is not None else False))
 
@@ -310,7 +360,7 @@ class PluginConfigBox(QGroupBox):
             return widget
 
         # --------------------------------------------------------------
-        if item.kind == "slider":
+        if isinstance(item, SliderItem):
             widget = QSlider(Qt.Orientation.Horizontal)
 
             widget.setMinimum(int(item.minimum))
@@ -332,7 +382,7 @@ class PluginConfigBox(QGroupBox):
             return widget
 
         # --------------------------------------------------------------
-        if item.kind == "int":
+        if isinstance(item, IntItem):
 
             widget = QSpinBox()
             widget.setMinimum(int(item.minimum))
@@ -352,7 +402,7 @@ class PluginConfigBox(QGroupBox):
             return widget
 
         # --------------------------------------------------------------
-        if item.kind == "float":
+        if isinstance(item, FloatItem):
 
             widget = QDoubleSpinBox()
             widget.setMinimum(float(item.minimum))
@@ -376,7 +426,7 @@ class PluginConfigBox(QGroupBox):
             return widget
 
         # --------------------------------------------------------------
-        if item.kind == "text":
+        if isinstance(item, TextItem):
             widget = QLineEdit()
             if item.default is not None:
                 widget.setText(str(item.default))
@@ -389,6 +439,21 @@ class PluginConfigBox(QGroupBox):
             )
             return widget
 
+        if isinstance(item, ComboBoxItem):
+            widget = QComboBox()
+
+            for value in item.values:
+                widget.addItem(str(value), userData=value)
+
+            if item.default in item.values:
+                widget.setCurrentIndex(item.values.index(item.default))
+
+            widget.currentIndexChanged.connect(
+                lambda _index, key=item.key, combo=widget:
+                    self.valueChanged.emit(key, combo.currentData())
+            )
+
+            return widget
         return None
 
     # ------------------------------------------------------------------
@@ -414,6 +479,9 @@ class PluginConfigBox(QGroupBox):
         if isinstance(widget, QLineEdit):
             return widget.text()
 
+        if isinstance(widget, QComboBox):
+            return widget.currentData()
+
         return None
 
     # ------------------------------------------------------------------
@@ -424,7 +492,7 @@ class PluginConfigBox(QGroupBox):
             return cfg
         
         for item in self.items:
-            if item.kind == "separator":
+            if isinstance(item, SeparatorItem):
                 continue
             cfg[item.key] = self.get_value(item.key)
         return cfg
@@ -437,7 +505,7 @@ class PluginConfigBox(QGroupBox):
 
         for item in self.items:
 
-            if item.kind == "separator":
+            if isinstance(item, SeparatorItem):
                 continue
 
             if item.key not in config:
@@ -464,7 +532,10 @@ class PluginConfigBox(QGroupBox):
             elif isinstance(widget, QLineEdit):
                 widget.setText(str(value))
 
-
+            elif isinstance(widget, QComboBox):
+                index = widget.findData(value)
+                if index >= 0:
+                    widget.setCurrentIndex(index)
 # ------------------------------------------------------------------------------------------
 class BatchPlugin:
     """

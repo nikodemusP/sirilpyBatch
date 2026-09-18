@@ -13,8 +13,7 @@ Every Plugin-Box has a set of items to be configured
 
 ```python
 calibrate_items = [
-    PluginItem(
-        kind="checkbox",  
+    CheckboxItem(
         key="cfa",          
         label="CFA format",
         colspan=2,
@@ -38,7 +37,6 @@ class CalibratePlugin(BatchPlugin):
 
 |||
 |-|-|
-|kind|available items are checkbox, text, int, fload, slider
 |key|key name of the item
 |label|label of the item
 |colspan|columns used by the item
