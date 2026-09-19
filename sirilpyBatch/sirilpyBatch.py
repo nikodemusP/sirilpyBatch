@@ -18,8 +18,10 @@ Key building blocks:
     Batch                - the main window tying everything together.
 """
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 import importlib.util
+import json
 import os
 import pathlib
 import sys
@@ -64,10 +66,8 @@ class BatchConfig:
     Reads and writes the plugin's on-disk configuration.
 
     Two separate files are involved:
-      * ``config.yaml``               - per-project settings, stored in the current
-                                         Siril working directory (created on first use).
-      * ``origin_m2_presets.yaml``    - user-wide presets, stored in Siril's user data
-                                         directory so they survive across projects.
+      * ``sirilpyBatch.yaml``    - user-wide presets, stored in Siril's user data
+                                   directory so they survive across projects.
     """
 
     def __init__(self, siril):
@@ -75,8 +75,58 @@ class BatchConfig:
         config_dir = Path(siril.get_siril_userdatadir())
         config_dir.mkdir(parents=True, exist_ok=True)
         self.presets_file = config_dir / "sirilpyBatch.yaml"
+        self.global_config_file = Path(__file__).resolve().with_name(
+            "sirilpyConfig.yaml"
+        )
+        self._readConfig()
 
-    def readPresetConfig(self):
+    def get_value(self, key: str, default):
+        """Resolve values such as telescope.focalLen."""
+        parts = key.split(".")
+        value = self.config
+        for part in parts:
+            print(f"{part}\n")
+            value = value.get(part)
+            print(f"{value}\n")
+            if value == None:
+                return default
+        return value        
+
+    def _readConfig(self):
+        global_config = self._readGlobalConfig() or {}
+        preset_config = self._readPresetConfig() or {}
+        self.config   = {
+            **global_config,
+            **preset_config,            
+        }
+
+    def _readGlobalConfig(self):
+        """Load the shared telescope/sensor configuration."""
+        if not self.global_config_file.exists():
+            self.siril.log(
+                f"Global config not found: {self.global_config_file}",
+                LogColor.RED,
+            )
+            return {}
+
+        try:
+            with open(self.global_config_file, "r", encoding="utf-8") as file:
+                config = yaml.safe_load(file)
+
+            self.siril.log(
+                "Global configuration loaded successfully.",
+                LogColor.GREEN,
+            )
+            return config if isinstance(config, dict) else {}
+
+        except Exception as error:
+            self.siril.log(
+                f"Error reading global config: {error}",
+                LogColor.RED,
+            )
+            return {}
+
+    def _readPresetConfig(self):
         """Load the user-wide presets file, or None if it doesn't exist yet / fails to parse."""
         self.siril.log(f"read preset config", LogColor.GREEN)
         if not self.presets_file.exists():
@@ -94,11 +144,32 @@ class BatchConfig:
     def storePresets(self, config):
         """Persist the user-wide presets dict to ``sirilpyBatch.yaml``."""
         try:
+            config.setdefault("telescopeName",self.config.get("telescopeName", {}))
             with open(self.presets_file, "w") as f:
                 yaml.safe_dump(config, f)
+                self._readConfig()
                 self.siril.log("Configuration saved successfully.", LogColor.GREEN)
         except Exception as e:
             self.siril.log(f"Error saving configuration file: {str(e)}", LogColor.RED)
+
+    def telescope_list(self):
+        return self.config.get("telescopes", [])
+
+    def selected_telescope_name(self):
+        return self.config.get("telescope", {}).get("name", "")
+
+    def set_selected_telescope(self, name):
+        selected_telescope = next(
+            (
+                telescope
+                for telescope in self.telescope_list()
+                if telescope.get("name") == name
+            ),
+            None,
+        )
+
+        if selected_telescope is not None:
+            self.config["telescope"] = deepcopy(selected_telescope)
 
 
 # ------------------------------------------------------------------------------------------
@@ -113,8 +184,8 @@ class BatchContext:
     """
 
     siril: Any
-    config: dict
-
+    config: BatchConfig
+    plugin_config: dict
 
 # ------------------------------------------------------------------------------------------
 @dataclass
@@ -135,61 +206,162 @@ class PluginItem:
     # wide text field); clamped to the box's total column count and will
     # wrap to a new row if it doesn't fit in the remaining space.
 
+    def create_widget(self) -> QWidget:
+        raise NotImplementedError
+
+    def bind_widget(self, widget: QWidget, callback):
+        raise NotImplementedError
+
+    def get_value(self, widget: QWidget) -> Any:
+        raise NotImplementedError
+
+    def set_value(self, widget: QWidget, value: Any):
+        raise NotImplementedError
+    
 @dataclass
 class SeparatorItem(PluginItem):
-    pass
+    def create_widget(self):
+        return None
+
+    def bind_widget(self, widget, callback):
+        pass
+
+    def get_value(self, widget):
+        return None
+
+    def set_value(self, widget, value):
+        pass
 
 
 @dataclass
 class CheckboxItem(PluginItem):
     labelPos: str = "RIGHT"
-    pass
+
+    def create_widget(self):
+        widget = QCheckBox()
+        widget.setChecked(bool(self.default if self.default is not None else False))
+        return widget
+
+    def bind_widget(self, widget, callback):
+        widget.stateChanged.connect(
+            lambda state, key=self.key: callback(
+                state == Qt.CheckState.Checked.value,
+                key,
+            )
+        )
+
+    def get_value(self, widget):
+        return widget.isChecked()
+
+    def set_value(self, widget, value):
+        widget.setChecked(bool(value))
 
 @dataclass
 class NumberItem(PluginItem):
     step: float = 1
     minimum: float = 0
     maximum: float = 100
-    pass
+
+    def bind_widget(self, widget, callback):
+        widget.valueChanged.connect(
+            lambda value, key=self.key: callback(value, key)
+        )
+
+    def get_value(self, widget):
+        return widget.value()
+
+    def set_value(self, widget, value):
+        widget.setValue(value)
 
 @dataclass
 class SliderItem(NumberItem):
-    step: float = 1
-    minimum: float = 0
-    maximum: float = 100
-    pass
+    def create_widget(self):
+        widget = QSlider(Qt.Orientation.Horizontal)
+        widget.setMinimum(int(self.minimum))
+        widget.setMaximum(int(self.maximum))
+        widget.setSingleStep(int(self.step))
+        widget.setValue(int(self.default if self.default is not None else self.minimum))
+        return widget
+    def set_value(self, widget, value):
+        widget.setValue(int(value))
 
 @dataclass
 class IntItem(NumberItem):
-    pass
-
+    def create_widget(self):
+        widget = QSpinBox()
+        widget.setMinimum(int(self.minimum))
+        widget.setMaximum(int(self.maximum))
+        widget.setSingleStep(int(self.step))
+        widget.setValue(int(self.default if self.default is not None else self.minimum))
+        return widget
+    def set_value(self, widget, value):
+        widget.setValue(int(value))
+    
 @dataclass
 class FloatItem(NumberItem):
-    decimals: int = 2  # used only by "float" items
-    pass
+    decimals: int = 2
+
+    def create_widget(self):
+        widget = QDoubleSpinBox()
+        widget.setMinimum(float(self.minimum))
+        widget.setMaximum(float(self.maximum))
+        widget.setSingleStep(float(self.step))
+        widget.setDecimals(int(self.decimals))
+        widget.setValue(float(self.default if self.default is not None else self.minimum))
+        return widget
 
 @dataclass
 class TextItem(PluginItem):
-    pass
+    def create_widget(self):
+        widget = QLineEdit()
+        if self.default is not None:
+            widget.setText(str(self.default))
+        return widget
+
+    def bind_widget(self, widget, callback):
+        widget.textChanged.connect(
+            lambda value, key=self.key: callback(value, key)
+        )
+
+    def get_value(self, widget):
+        return widget.text()
+
+    def set_value(self, widget, value):
+        widget.setText(str(value))
 
 @dataclass
 class ComboBoxItem(PluginItem):
     values: list[Any] = field(default_factory=list)
+
+    def create_widget(self):
+        widget = QComboBox()
+        for value in self.values:
+            widget.addItem(str(value), userData=value)
+        if self.default in self.values:
+            widget.setCurrentIndex(self.values.index(self.default))
+        return widget
+
+    def bind_widget(self, widget, callback):
+        widget.currentIndexChanged.connect(
+            lambda _index, key=self.key, combo=widget: callback(combo.currentData(), key)
+        )
+
+    def get_value(self, widget):
+        return widget.currentData()
+
+    def set_value(self, widget, value):
+        index = widget.findData(value)
+        if index >= 0:
+            widget.setCurrentIndex(index)
     
 # ------------------------------------------------------------------------------------------
 class PluginConfigBox(QGroupBox):
     """
     A checkable group box that renders a plugin's ``PluginItem`` list as a
     grid of labeled widgets, plus an optional "Load" and/or "Process" button.
-
-    Signals:
-        valueChanged(str, object) -> active on each value change of the contained widgets, emits (key, value)
-        loadRequested()           -> "Load" button was clicked (only if has_load=True)
-        processRequested()        -> "Process" button was clicked (only if has_process=True)
     """
 
     valueChanged = pyqtSignal(str, object)
-
     loadRequested = pyqtSignal()
     processRequested = pyqtSignal()
 
@@ -204,338 +376,140 @@ class PluginConfigBox(QGroupBox):
     ):
         super().__init__(title, parent)
 
-        self.items = items
+        self.items = list(items or [])
         self.columns = max(1, columns)
-
-        # Maps PluginItem.key -> the live Qt widget holding that item's value.
         self.widgets: dict[str, QWidget] = {}
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self.item_by_key: dict[str, PluginItem] = {
+            item.key: item
+            for item in self.items
+            if not isinstance(item, SeparatorItem) and item.key is not None
+        }
 
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._create_ui(has_load=has_load, has_process=has_process)
 
-    # ------------------------------------------------------------------
     def _create_ui(self, has_load: bool, has_process: bool):
-        """
-        Lay out ``self.items`` in a grid with ``self.columns`` columns
-        (wrapping to a new row as needed), then append the Load/Process
-        button row at the bottom if requested.
-
-        A "separator" item forces a line break and draws a thin horizontal
-        rule spanning the full width of the grid.
-        """
         main_layout = QVBoxLayout(self)
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(
-            4
-        )  # keep rows close together, especially when items span full width
-        # Reserve all `columns` as equal-width slots up front. Without this,
-        # Qt only creates as many grid columns as actually have a widget in
-        # them, so a colspan=2 item on a 3-column grid would stretch to fill
-        # 100% of the width instead of the intended 2/3, whenever nothing
-        # else ever lands in the 3rd column.
+        grid.setVerticalSpacing(4)
+
         for col in range(self.columns):
             grid.setColumnStretch(col, 1)
 
         row = 0
         column = 0
 
-        if self.items:
-            for item in self.items:
-                if isinstance(item, SeparatorItem):
-                    # Start the separator on its own row, even if the current
-                    # row isn't full yet.
-                    if column != 0:
-                        row += 1
-                        column = 0
-
-                    line = QLabel()
-                    line.setFixedHeight(1)
-
-                    grid.addWidget(line, row, 0, 1, self.columns)
-
+        for item in self.items:
+            if isinstance(item, SeparatorItem):
+                if column != 0:
                     row += 1
-                    continue
-
-                widget = self._create_item_widget(item)
-
-                if widget is None:
-                    continue
-
-                # Clamp the requested span to a sane range and wrap to a fresh
-                # row first if it wouldn't fit in the remaining columns.
-                span = max(1, min(item.colspan, self.columns))
-                if column + span > self.columns:
                     column = 0
-                    row += 1
+                line = QLabel()
+                line.setFixedHeight(1)
+                grid.addWidget(line, row, 0, 1, self.columns)
+                row += 1
+                continue
 
-                # Each cell is its own little "label beside widget" mini-layout.
-                label = QLabel(item.label)
-                if item.tooltip:
-                    label.setToolTip(item.tooltip)
-                    widget.setToolTip(item.tooltip)
+            widget = item.create_widget()
+            if widget is None:
+                continue
 
-                # Label and widget side by side on one line.
-                cell = QHBoxLayout()
-                cell.setContentsMargins(0, 0, 0, 0)
-                cell.setSpacing(6)
+            span = max(1, min(item.colspan, self.columns))
+            if column + span > self.columns:
+                column = 0
+                row += 1
 
-                label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
-                if isinstance(widget, QCheckBox):
-                    widget.setSizePolicy(
-                        QSizePolicy.Policy.Fixed,
-                        QSizePolicy.Policy.Fixed,
-                    )
-                else:
-                    widget.setSizePolicy(
-                        QSizePolicy.Policy.Expanding,
-                        QSizePolicy.Policy.Fixed,
-                    )
+            label = QLabel(item.label)
+            if item.tooltip:
+                label.setToolTip(item.tooltip)
+                widget.setToolTip(item.tooltip)
 
-                label_position = (item.labelPos or "LEFT").upper()
-                if label_position == "RIGHT":
-                    cell.addWidget(widget)
-                    cell.addSpacing(4)
-                    cell.addWidget(label)
-                    cell.addStretch(1)
-                else:
-                    cell.addWidget(label)
-                    cell.addWidget(widget, 1)
-                    
-                container = QWidget()
-                container.setLayout(cell)
+            cell = QHBoxLayout()
+            cell.setContentsMargins(0, 0, 0, 0)
+            cell.setSpacing(6)
 
-                grid.addWidget(container, row, column, 1, span)
-                self.widgets[item.key] = widget
+            label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+            if isinstance(widget, QCheckBox):
+                widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            else:
+                widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-                # Advance past the cell(s) just used, wrapping to a new row when full.
-                column += span
-                if column >= self.columns:
-                    column = 0
-                    row += 1
+            label_position = (item.labelPos or "LEFT").upper()
+            if label_position == "RIGHT":
+                cell.addWidget(widget)
+                cell.addSpacing(4)
+                cell.addWidget(label)
+                cell.addStretch(1)
+            else:
+                cell.addWidget(label)
+                cell.addWidget(widget, 1)
 
-            main_layout.addLayout(grid)
+            container = QWidget()
+            container.setLayout(cell)
 
-        # Optional footer row with Load/Process buttons, right-aligned.
+            grid.addWidget(container, row, column, 1, span)
+            self.widgets[item.key] = widget
+
+            item.bind_widget(widget, lambda value, key: self.valueChanged.emit(key, value))
+
+            column += span
+            if column >= self.columns:
+                column = 0
+                row += 1
+
+        main_layout.addLayout(grid)
+
         buttons = QHBoxLayout()
         buttons.addStretch()
         if has_load:
             load_button = QPushButton("Load")
             load_button.setMinimumWidth(60)
-            load_button.setMinimumHeight(30)            
+            load_button.setMinimumHeight(30)
             load_button.clicked.connect(self.loadRequested.emit)
             buttons.addWidget(load_button)
 
         if has_process:
             process_button = QPushButton("Process")
             process_button.setMinimumWidth(60)
-            process_button.setMinimumHeight(30)            
+            process_button.setMinimumHeight(30)
             process_button.clicked.connect(self.processRequested.emit)
             buttons.addWidget(process_button)
 
         if has_load or has_process:
             main_layout.addLayout(buttons)
 
-    # ------------------------------------------------------------------
-    def _create_item_widget(self, item: PluginItem) -> Optional[QWidget]:
-        """
-        Build and wire up the concrete Qt widget for one ``PluginItem``.
-
-        Every widget's change signal is connected so it re-emits this box's
-        generic ``valueChanged(key, value)`` signal, letting callers observe
-        all controls uniformly without caring about the underlying widget type.
-        """
-
-        # --------------------------------------------------------------
-        if isinstance(item, CheckboxItem):
-            widget = QCheckBox()
-            widget.setChecked(bool(item.default if item.default is not None else False))
-
-            widget.stateChanged.connect(
-                lambda state, key=item.key: self.valueChanged.emit(
-                    key,
-                    state == Qt.CheckState.Checked.value,
-                )
-            )
-            return widget
-
-        # --------------------------------------------------------------
-        if isinstance(item, SliderItem):
-            widget = QSlider(Qt.Orientation.Horizontal)
-
-            widget.setMinimum(int(item.minimum))
-
-            widget.setMaximum(int(item.maximum))
-
-            widget.setSingleStep(int(item.step))
-
-            value = item.default if item.default is not None else item.minimum
-
-            widget.setValue(int(value))
-
-            widget.valueChanged.connect(
-                lambda value, key=item.key: self.valueChanged.emit(
-                    key,
-                    value,
-                )
-            )
-            return widget
-
-        # --------------------------------------------------------------
-        if isinstance(item, IntItem):
-
-            widget = QSpinBox()
-            widget.setMinimum(int(item.minimum))
-            widget.setMaximum(int(item.maximum))
-            widget.setSingleStep(int(item.step))
-
-            value = item.default if item.default is not None else item.minimum
-
-            widget.setValue(int(value))
-
-            widget.valueChanged.connect(
-                lambda value, key=item.key: self.valueChanged.emit(
-                    key,
-                    value,
-                )
-            )
-            return widget
-
-        # --------------------------------------------------------------
-        if isinstance(item, FloatItem):
-
-            widget = QDoubleSpinBox()
-            widget.setMinimum(float(item.minimum))
-
-            widget.setMaximum(float(item.maximum))
-
-            widget.setSingleStep(float(item.step))
-
-            widget.setDecimals(int(item.decimals))
-
-            value = item.default if item.default is not None else item.minimum
-
-            widget.setValue(float(value))
-
-            widget.valueChanged.connect(
-                lambda value, key=item.key: self.valueChanged.emit(
-                    key,
-                    value,
-                )
-            )
-            return widget
-
-        # --------------------------------------------------------------
-        if isinstance(item, TextItem):
-            widget = QLineEdit()
-            if item.default is not None:
-                widget.setText(str(item.default))
-
-            widget.textChanged.connect(
-                lambda value, key=item.key: self.valueChanged.emit(
-                    key,
-                    value,
-                )
-            )
-            return widget
-
-        if isinstance(item, ComboBoxItem):
-            widget = QComboBox()
-
-            for value in item.values:
-                widget.addItem(str(value), userData=value)
-
-            if item.default in item.values:
-                widget.setCurrentIndex(item.values.index(item.default))
-
-            widget.currentIndexChanged.connect(
-                lambda _index, key=item.key, combo=widget:
-                    self.valueChanged.emit(key, combo.currentData())
-            )
-
-            return widget
-        return None
-
-    # ------------------------------------------------------------------
     def get_value(self, key: str) -> Any:
-        """Read the current value of the widget registered under ``key``."""
-
         widget = self.widgets.get(key)
-        if widget is None:
+        item = self.item_by_key.get(key)
+
+        if widget is None or item is None:
             return None
 
-        if isinstance(widget, QCheckBox):
-            return widget.isChecked()
+        return item.get_value(widget)
 
-        if isinstance(widget, QSlider):
-            return widget.value()
+    def set_config(self, config: Optional[dict[str, Any]]):
+        if not config:
+            return
 
-        if isinstance(widget, QSpinBox):
-            return widget.value()
+        for item in self.items:
+            if isinstance(item, SeparatorItem):
+                continue
+            if item.key not in config:
+                continue
+            widget = self.widgets.get(item.key)
+            if widget is None:
+                continue
+            item.set_value(widget, config[item.key])
 
-        if isinstance(widget, QDoubleSpinBox):
-            return widget.value()
-
-        if isinstance(widget, QLineEdit):
-            return widget.text()
-
-        if isinstance(widget, QComboBox):
-            return widget.currentData()
-
-        return None
-
-    # ------------------------------------------------------------------
     def get_config(self) -> dict[str, Any]:
-        """Snapshot every item's current value into a plain dict (e.g. for saving to YAML)."""
         cfg: dict[str, Any] = {}
-        if self.items == None:
-            return cfg
-        
         for item in self.items:
             if isinstance(item, SeparatorItem):
                 continue
             cfg[item.key] = self.get_value(item.key)
         return cfg
-
-    # ------------------------------------------------------------------
-    def set_config(self, config: Optional[dict[str, Any]]):
-        """Apply previously-saved values back onto the widgets (e.g. when loading a preset)."""
-        if not config:
-            return
-
-        for item in self.items:
-
-            if isinstance(item, SeparatorItem):
-                continue
-
-            if item.key not in config:
-                continue
-
-            value = config[item.key]
-            widget = self.widgets.get(item.key)
-
-            if widget is None:
-                continue
-
-            if isinstance(widget, QCheckBox):
-                widget.setChecked(bool(value))
-
-            elif isinstance(widget, QSlider):
-                widget.setValue(int(value))
-
-            elif isinstance(widget, QSpinBox):
-                widget.setValue(int(value))
-
-            elif isinstance(widget, QDoubleSpinBox):
-                widget.setValue(float(value))
-
-            elif isinstance(widget, QLineEdit):
-                widget.setText(str(value))
-
-            elif isinstance(widget, QComboBox):
-                index = widget.findData(value)
-                if index >= 0:
-                    widget.setCurrentIndex(index)
+    
 # ------------------------------------------------------------------------------------------
 class BatchPlugin:
     """
@@ -550,18 +524,20 @@ class BatchPlugin:
     a subclass actually overrides.
     """
 
-    def __init__(self, siril: Any, config: dict ):
+    def __init__(self, siril: Any, config: BatchConfig ):
         self.context = BatchContext(
             siril=siril,
-            config=config if isinstance(config, dict) else {},
+            config=config,
+            plugin_config={},
         )
 
-    def set_up(self, key: str, title: str, items: PluginItem, columns: int = 5):
+    def set_up(self, key: str, title: str, items: PluginItem, columns: int = 5, plugin_config: dict = {}):
         """Called once after construction to bind this instance to its registry entry."""
         self.plugin_items = items
         self.key_name = key
         self.title = title
         self.columns = columns
+        self.context.plugin_config = plugin_config
         self.context.siril.log(f"setup plugin: {self.title}", LogColor.GREEN)
 
     def create_plugin_box(self):
@@ -639,6 +615,9 @@ class BatchPlugin:
         """Convenience accessor for Siril's current working directory."""
         return self.context.siril.get_siril_wd()
 
+    def get_config(self, key: str, default):
+        return self.context.config.get_value(key,default)
+    
     def get_value(self, key: str):
         """Read the current value of one of this plugin's config widgets."""
         return self.box.get_value(key)
@@ -646,11 +625,11 @@ class BatchPlugin:
     @property
     def config(self):
         """The plugin's persisted settings dict (as loaded in ``set_up``)."""
-        return self.context.config
+        return self.context.plugin_config
 
     @config.setter
     def config(self, value):
-        self.context.config = value
+        self.plugin_config.config = value
 
 
 @dataclass
@@ -668,7 +647,7 @@ class BatchPluginEntry:
     columns: int = 5
     enabled: bool = True
 
-    def instantiate(self, siril: Any, config: dict) -> BatchPlugin:
+    def instantiate(self, siril: Any, config: BatchConfig, plugin_config: dict) -> BatchPlugin:
         """Create and set up a fresh plugin instance from this entry."""
         instance = self.plugin_cls(siril,config)
         instance.set_up(
@@ -676,6 +655,7 @@ class BatchPluginEntry:
             title=self.title,
             items=self.items,
             columns=self.columns,
+            config=plugin_config
         )
         return instance
 
@@ -715,8 +695,11 @@ class BatchPluginRegistry:
 
     @classmethod
     def all(cls) -> list[BatchPluginEntry]:
-        """Return every registered plugin entry (enabled or not)."""
-        return cls._entries
+        """Return every registered plugin entry sorted by title."""
+        return sorted(
+            cls._entries,
+            key=lambda entry: (entry.title or "").lower(),
+        )
 
     # ------------------------------------------------------------------
     @classmethod
@@ -771,12 +754,14 @@ class PluginContainer(QWidget):
         self,
         registry: BatchPluginRegistry,
         siril: Any,
+        config: BatchConfig,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
 
         self.registry = registry
         self.siril = siril
+        self.config = config
         self.instances: list[BatchPluginInstance] = []
 
         self.setAcceptDrops(True)
@@ -886,7 +871,7 @@ class PluginContainer(QWidget):
     # ==================================================================
     # ADD PLUGIN
     # ==================================================================
-    def add_plugin( self, entry: BatchPluginEntry, config: Optional[dict] = None ) -> Optional[BatchPluginInstance]:
+    def add_plugin( self, entry: BatchPluginEntry, plugin_config: Optional[dict] = None ) -> Optional[BatchPluginInstance]:
         """
         Instantiate ``entry``, build its config box, wrap it in a row with
         move/remove buttons, and append it to the batch.
@@ -917,7 +902,7 @@ class PluginContainer(QWidget):
 
         try:
             print("Init plugin")
-            plugin = entry.plugin_cls(self.siril, config)
+            plugin = entry.plugin_cls(self.siril, self.config)
 
             print("setup plugin")
             plugin.set_up(
@@ -933,8 +918,8 @@ class PluginContainer(QWidget):
             print("set config")
 
             # Restore saved configuration
-            if config is not None:
-                widget.set_config(config)
+            if plugin_config is not None:
+                widget.set_config(plugin_config)
 
         except Exception as e:
 
@@ -1250,63 +1235,63 @@ class PluginContainer(QWidget):
 
         self._show_empty_label()
 
-    # ==================================================================
-    # LOAD CONFIGURATION
-    # ==================================================================
+    # # ==================================================================
+    # # LOAD CONFIGURATION
+    # # ==================================================================
 
-    def load_config(
-        self,
-        plugins_config: list[dict],
-    ):
-        """Replace the current batch with the plugins described by ``plugins_config``
-        (the same shape produced by ``get_config``)."""
+    # def load_config(
+    #     self,
+    #     plugins_config: list[dict],
+    # ):
+    #     """Replace the current batch with the plugins described by ``plugins_config``
+    #     (the same shape produced by ``get_config``)."""
 
-        # --------------------------------------------------------------
-        # Remove current plugins
-        # --------------------------------------------------------------
+    #     # --------------------------------------------------------------
+    #     # Remove current plugins
+    #     # --------------------------------------------------------------
 
-        self.clear_plugins()
+    #     self.clear_plugins()
 
-        if not plugins_config:
-            return
+    #     if not plugins_config:
+    #         return
 
-        # --------------------------------------------------------------
-        # Restore plugins
-        # --------------------------------------------------------------
+    #     # --------------------------------------------------------------
+    #     # Restore plugins
+    #     # --------------------------------------------------------------
 
-        for plugin_data in plugins_config:
+    #     for plugin_data in plugins_config:
 
-            if not isinstance(
-                plugin_data,
-                dict,
-            ):
-                continue
+    #         if not isinstance(
+    #             plugin_data,
+    #             dict,
+    #         ):
+    #             continue
 
-            key = plugin_data.get("key")
+    #         key = plugin_data.get("key")
 
-            if not key:
-                continue
+    #         if not key:
+    #             continue
 
-            entry = self.registry.get(key)
+    #         entry = self.registry.get(key)
 
-            if entry is None:
+    #         if entry is None:
 
-                self.siril.log(
-                    f"Plugin not found: {key}",
-                    LogColor.RED,
-                )
+    #             self.siril.log(
+    #                 f"Plugin not found: {key}",
+    #                 LogColor.RED,
+    #             )
 
-                continue
+    #             continue
 
-            config = plugin_data.get(
-                "config",
-                {},
-            )
+    #         plugin_config = plugin_data.get(
+    #             "config",
+    #             {},
+    #         )
 
-            self.add_plugin(
-                entry,
-                config=config,
-            )
+    #         self.add_plugin(
+    #             entry,
+    #             plugin_config=plugin_config,
+    #         )
 
 
 class PluginList(QListWidget):
@@ -1372,7 +1357,7 @@ class Batch(QMainWindow):
         
         self.siril.log(f"read config", LogColor.GREEN)
         self.config = BatchConfig(self.siril)
-        self.presets = self.config.readPresetConfig()
+
         # Load the plugins
         self.siril.log(f"load plugins", LogColor.GREEN)
         
@@ -1403,6 +1388,9 @@ class Batch(QMainWindow):
         main_layout = QVBoxLayout(central)
         content_layout = QHBoxLayout()
 
+        # --------------------------------------------------------------------
+        # Info Box
+        # --------------------------------------------------------------------
         info_box = QGroupBox()
         info_layout = QVBoxLayout(info_box)
         info_label = QLabel("Information")
@@ -1413,7 +1401,25 @@ class Batch(QMainWindow):
         cwd_label.setWordWrap(True)
         info_layout.addWidget(cwd_label)
 
+        self.telescope_combo = QComboBox(info_box)
+
+        telescopes = self.config.telescope_list()
+        self.telescope_combo.addItems(
+            telescope["name"] for telescope in telescopes
+        )
+
+        selected = self.config.selected_telescope_name()
+        index = self.telescope_combo.findText(selected)
+        if index >= 0:
+            self.telescope_combo.setCurrentIndex(index)
+
+        self.telescope_combo.currentTextChanged.connect( self.config.set_selected_telescope )
+
+        info_layout.addWidget(QLabel("Telescope:"))
+        info_layout.addWidget(self.telescope_combo)
+
         main_layout.addWidget(info_box)
+
         # --------------------------------------------------------------------
         # Plugin List
         # --------------------------------------------------------------------
@@ -1448,7 +1454,7 @@ class Batch(QMainWindow):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setAcceptDrops(True)
         # Plugin container
-        self.plugin_container = PluginContainer(registry=BatchPluginRegistry, siril=self.siril)
+        self.plugin_container = PluginContainer(registry=BatchPluginRegistry, siril=self.siril, config=self.config)
 
         self.scroll_area.setWidget(self.plugin_container)
         center_layout.addWidget(self.scroll_area)
@@ -1482,7 +1488,7 @@ class Batch(QMainWindow):
         file's ``Batches:`` section, plus a synthetic "empty" entry
         (selected by default) for "start with no plugins".
         """
-        batches = self.presets.get("Batches", {}) if isinstance(self.presets, dict) else {}
+        batches = self.config.get_value("Batches", {})
         names = [name for name in batches.keys() if name != "empty"]
 
         self.batch_combo.addItem("empty")
@@ -1503,7 +1509,7 @@ class Batch(QMainWindow):
         """
         self.plugin_container.clear_plugins()
 
-        batches = self.presets.get("Batches", {}) if isinstance(self.presets, dict) else {}
+        batches = self.config.get_value("Batches", {})
         entries = batches.get(name)
 
         if not isinstance(entries, list):
@@ -1527,11 +1533,11 @@ class Batch(QMainWindow):
 
             # The YAML uses "config: none" for plugins that take no settings;
             # only pass a dict through to add_plugin/set_config.
-            config = item.get("config")
-            if not isinstance(config, dict):
-                config = None
+            plugin_config = item.get("config")
+            if not isinstance(plugin_config, dict):
+                plugin_config = None
 
-            self.plugin_container.add_plugin(entry, config=config)
+            self.plugin_container.add_plugin(entry, plugin_config=plugin_config)
 
     def _save_current_batch(self):
         """
