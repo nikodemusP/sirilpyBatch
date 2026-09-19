@@ -1,0 +1,31 @@
+Batches:
+  Default:
+  - config: {}
+    plugin: sorter
+  - config:
+      cfa: false
+      debayer: false
+      equalize_cfa: false
+      sigma:
+      - 3
+      - 3
+    plugin: calibrate
+  - config:
+      bgtol:
+      - 0
+      - 2
+      catalogue: gaia
+      pcc: false
+      plade: true
+      spcc: false
+    plugin: color_calibration
+telescope:
+  filter:
+    No Filter (Broadband):
+    - -oscfilter="UV/IR Block"
+    No filter:
+    - -oscfilter="No filter"
+  focalLen: 335
+  name: Celestron Origin Smart Mark 2
+  pixelSize: 2.0
+  sensor: Sony IMX678

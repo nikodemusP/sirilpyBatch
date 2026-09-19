@@ -19,21 +19,22 @@ Key building blocks:
 """
 
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import importlib.util
 import json
 import os
 import pathlib
 import sys
+import textwrap
 from pathlib import Path
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type, Union
 
 import yaml
 import sirilpy as s
 from sirilpy import LogColor
 
-from PyQt6.QtCore import QMimeData, Qt, pyqtSignal
-from PyQt6.QtGui import QPixmap, QDrag
+from PyQt6.QtCore import QMimeData, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QPixmap, QDrag, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
     QLineEdit,
@@ -74,13 +75,11 @@ class BatchConfig:
         self.siril = siril
         config_dir = Path(siril.get_siril_userdatadir())
         config_dir.mkdir(parents=True, exist_ok=True)
-        self.presets_file = config_dir / "sirilpyBatch.yaml"
-        self.global_config_file = Path(__file__).resolve().with_name(
-            "sirilpyConfig.yaml"
-        )
+        self.presets_file = Path(__file__).resolve().with_name("sirilpyBatch.yaml")
+        self.global_config_file = Path(__file__).resolve().with_name("sirilpyConfig.yaml")
         self._readConfig()
 
-    def get_value(self, key: str, default):
+    def get_value(self, key: str, default: Any = None):
         """Resolve values such as telescope.focalLen."""
         parts = key.split(".")
         value = self.config
@@ -144,7 +143,7 @@ class BatchConfig:
     def storePresets(self, config):
         """Persist the user-wide presets dict to ``sirilpyBatch.yaml``."""
         try:
-            config.setdefault("telescopeName",self.config.get("telescopeName", {}))
+            config["telescope"] = self.config.get("telescope", {})
             with open(self.presets_file, "w") as f:
                 yaml.safe_dump(config, f)
                 self._readConfig()
@@ -187,6 +186,14 @@ class BatchContext:
     config: BatchConfig
     plugin_config: dict
 
+def resolve_config_value(value: Any, context: Optional[BatchContext]) -> Any:
+    """Löst Werte auf, die mit @ beginnen, unter Verwendung von BatchConfig."""
+    if isinstance(value, str) and value.startswith("@"):
+        if context and context.config:
+            # Entfernt das '@' und holt den Pfad (z.B. "telescope.filter")
+            return context.config.get_value(value[1:])
+    return value
+
 # ------------------------------------------------------------------------------------------
 @dataclass
 class PluginItem:
@@ -206,7 +213,7 @@ class PluginItem:
     # wide text field); clamped to the box's total column count and will
     # wrap to a new row if it doesn't fit in the remaining space.
 
-    def create_widget(self) -> QWidget:
+    def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
         raise NotImplementedError
 
     def bind_widget(self, widget: QWidget, callback):
@@ -237,9 +244,10 @@ class SeparatorItem(PluginItem):
 class CheckboxItem(PluginItem):
     labelPos: str = "RIGHT"
 
-    def create_widget(self):
+    def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
         widget = QCheckBox()
-        widget.setChecked(bool(self.default if self.default is not None else False))
+        resolved_default = resolve_config_value(self.default, context)
+        widget.setChecked(bool(resolved_default if resolved_default is not None else False))
         return widget
 
     def bind_widget(self, widget, callback):
@@ -275,24 +283,32 @@ class NumberItem(PluginItem):
 
 @dataclass
 class SliderItem(NumberItem):
-    def create_widget(self):
+    def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
         widget = QSlider(Qt.Orientation.Horizontal)
-        widget.setMinimum(int(self.minimum))
-        widget.setMaximum(int(self.maximum))
+        min_val = int(resolve_config_value(self.minimum, context))
+        max_val = int(resolve_config_value(self.maximum, context))
+        def_val = int(resolve_config_value(self.default, context) if self.default is not None else min_val)
+        
+        widget.setMinimum(min_val)
+        widget.setMaximum(max_val)
         widget.setSingleStep(int(self.step))
-        widget.setValue(int(self.default if self.default is not None else self.minimum))
+        widget.setValue(def_val)
         return widget
     def set_value(self, widget, value):
         widget.setValue(int(value))
 
 @dataclass
 class IntItem(NumberItem):
-    def create_widget(self):
+    def create_widget(self, context: Optional[BatchContext] = None):
         widget = QSpinBox()
-        widget.setMinimum(int(self.minimum))
-        widget.setMaximum(int(self.maximum))
+        min_val = int(resolve_config_value(self.minimum, context))
+        max_val = int(resolve_config_value(self.maximum, context))
+        def_val = int(resolve_config_value(self.default, context) if self.default is not None else min_val)
+
+        widget.setMinimum(min_val)
+        widget.setMaximum(max_val)
         widget.setSingleStep(int(self.step))
-        widget.setValue(int(self.default if self.default is not None else self.minimum))
+        widget.setValue(def_val)
         return widget
     def set_value(self, widget, value):
         widget.setValue(int(value))
@@ -301,21 +317,26 @@ class IntItem(NumberItem):
 class FloatItem(NumberItem):
     decimals: int = 2
 
-    def create_widget(self):
+    def create_widget(self, context: Optional[BatchContext] = None):
         widget = QDoubleSpinBox()
-        widget.setMinimum(float(self.minimum))
-        widget.setMaximum(float(self.maximum))
+        min_val = float(resolve_config_value(self.minimum, context))
+        max_val = float(resolve_config_value(self.maximum, context))
+        def_val = float(resolve_config_value(self.default, context) if self.default is not None else min_val)
+
+        widget.setMinimum(min_val)
+        widget.setMaximum(max_val)
         widget.setSingleStep(float(self.step))
         widget.setDecimals(int(self.decimals))
-        widget.setValue(float(self.default if self.default is not None else self.minimum))
+        widget.setValue(def_val)
         return widget
 
 @dataclass
 class TextItem(PluginItem):
-    def create_widget(self):
+    def create_widget(self, context: Optional[BatchContext] = None):
         widget = QLineEdit()
-        if self.default is not None:
-            widget.setText(str(self.default))
+        resolved_default = resolve_config_value(self.default, context)
+        if resolved_default is not None:
+            widget.setText(str(resolved_default))
         return widget
 
     def bind_widget(self, widget, callback):
@@ -333,12 +354,21 @@ class TextItem(PluginItem):
 class ComboBoxItem(PluginItem):
     values: list[Any] = field(default_factory=list)
 
-    def create_widget(self):
+    def create_widget(self, context: Optional[BatchContext] = None):
         widget = QComboBox()
-        for value in self.values:
+        widget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        widget.setMinimumContentsLength(6)
+        
+        resolved_values = resolve_config_value(self.values, context)
+        if not isinstance(resolved_values, list):
+            resolved_values = []
+            
+        for value in resolved_values:
             widget.addItem(str(value), userData=value)
-        if self.default in self.values:
-            widget.setCurrentIndex(self.values.index(self.default))
+            
+        resolved_default = resolve_config_value(self.default, context)
+        if resolved_default in resolved_values:
+            widget.setCurrentIndex(resolved_values.index(resolved_default))
         return widget
 
     def bind_widget(self, widget, callback):
@@ -353,7 +383,351 @@ class ComboBoxItem(PluginItem):
         index = widget.findData(value)
         if index >= 0:
             widget.setCurrentIndex(index)
-    
+
+@dataclass
+class RangeItem(PluginItem):
+    minimum: int = 0
+    maximum: int = 100
+
+    def __post_init__(self):
+        # YAML gives us "0,2" (a string) or [0, 2] (a list); normalise to a tuple.
+        if isinstance(self.default, str):
+            self.default = [part.strip() for part in self.default.split(",")]
+        if self.default is not None:
+            try:
+                low, high = self.default
+                self.default = (int(low), int(high))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"RangeItem '{self.key}': default must be two integers "
+                    f"like '0,2' or [0, 2], got {self.default!r}"
+                )
+
+    def create_widget(self, context: Optional[BatchContext] = None):
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        min_val = int(resolve_config_value(self.minimum, context))
+        max_val = int(resolve_config_value(self.maximum, context))
+        
+        resolved_default = resolve_config_value(self.default, context)
+        if isinstance(resolved_default, str):
+            resolved_default = [int(part.strip()) for part in resolved_default.split(",")]
+
+        low, high = resolved_default or (min_val, max_val)
+
+        widget.low = QSpinBox()
+        widget.high = QSpinBox()
+
+        for spinbox, value in ((widget.low, low), (widget.high, high)):
+            spinbox.setMinimum(min_val)
+            spinbox.setMaximum(max_val)
+            spinbox.setValue(int(value))
+            layout.addWidget(spinbox)
+
+        return widget
+
+    def bind_widget(self, widget, callback):
+        widget.low.valueChanged.connect(
+            lambda _value: callback(self.get_value(widget), self.key)
+        )
+        widget.high.valueChanged.connect(
+            lambda _value: callback(self.get_value(widget), self.key)
+        )
+
+    def get_value(self, widget):
+        return widget.low.value(), widget.high.value()
+
+    def set_value(self, widget, value):
+        low, high = value
+        widget.low.setValue(int(low))
+        widget.high.setValue(int(high))
+          
+# ------------------------------------------------------------------------------------------
+# YAML plugin definitions
+#
+# A plugin describes itself (registry entry, box layout and config widgets) as one YAML
+# document, which is passed straight to ``@BatchPluginRegistry.register(...)``:
+#
+#     Plugin:
+#         Key: color_calibration          # required, unique registry key
+#         Title: Color Calibration        # optional, defaults to Key
+#         Enabled: true                   # optional, false hides it from the sidebar
+#     Box:
+#         Columns: 6                      # optional, grid columns of the config box (default 5)
+#     Items:
+#         - CheckBox:
+#             Key: pcc
+#             Label: Photometric Color Calibration
+#             Colspan: 2
+#             Default: False
+#         - Separator
+#         - ComboBox:
+#             Key: catalogue
+#             Label: Catalogue
+#             Values: [none, apass, gaia]
+#             Default: gaia
+#
+# Section, item type and option names are case-insensitive. Item options map 1:1 onto the
+# fields of the matching PluginItem dataclass (Key, Label, LabelPos, Default, Tooltip,
+# Colspan, plus Values / Min / Max / Step / Decimals depending on the type).
+# ------------------------------------------------------------------------------------------
+def _norm(name: Any) -> str:
+    """Case-insensitive comparison form; ignores ``_``, ``-`` and spaces."""
+    return str(name).strip().lower().replace("_", "").replace("-", "").replace(" ", "")
+
+
+ITEM_TYPES: dict[str, Type[PluginItem]] = {
+    "checkbox": CheckboxItem,
+    "separator": SeparatorItem,
+    "seperator": SeparatorItem,  # common misspelling
+    "combobox": ComboBoxItem,
+    "combo": ComboBoxItem,
+    "text": TextItem,
+    "int": IntItem,
+    "integer": IntItem,
+    "float": FloatItem,
+    "slider": SliderItem,
+    "range": RangeItem,
+    "intrange": RangeItem,
+}
+
+# Short spellings accepted in YAML -> real dataclass field name.
+_OPTION_ALIASES = {"min": "minimum", "max": "maximum", "labelposition": "labelpos"}
+
+def _build_item(type_name: Any, options: Any, where: str) -> PluginItem:
+    """Create one PluginItem from its YAML type name and options mapping."""
+    normalized = _norm(type_name)
+    if normalized.endswith("item"):  # allow "CheckboxItem" as well as "Checkbox"
+        normalized = normalized[: -len("item")]
+    item_cls = ITEM_TYPES.get(normalized)
+    if item_cls is None:
+        raise ValueError(
+            f"{where}: unknown item type '{type_name}' "
+            f"(available: {', '.join(sorted(ITEM_TYPES))})"
+        )
+
+    if options is None:
+        options = {}
+    if not isinstance(options, dict):
+        raise ValueError(f"{where}: options of '{type_name}' must be a mapping, got {options!r}")
+
+    field_names = {f.name for f in fields(item_cls)}
+    valid = {_norm(name): name for name in field_names}
+    for alias, target in _OPTION_ALIASES.items():
+        if target in field_names:
+            valid[alias] = target
+
+    kwargs: dict[str, Any] = {}
+    for raw_key, value in options.items():
+        name = valid.get(_norm(raw_key))
+        if name is None:
+            raise ValueError(
+                f"{where}: unknown option '{raw_key}' for '{type_name}' "
+                f"(valid: {', '.join(sorted(field_names))})"
+            )
+        kwargs[name] = value
+
+    try:
+        return item_cls(**kwargs)
+    except ValueError as error:
+        raise ValueError(f"{where}: {error}") from error
+
+
+def _load_yaml(spec: Any, source: str) -> Any:
+    """Parse ``spec`` if it is YAML text (dedented first); pass anything else through."""
+    if not isinstance(spec, str):
+        return spec
+    try:
+        return yaml.safe_load(textwrap.dedent(spec))
+    except yaml.YAMLError as error:
+        raise ValueError(f"{source}: invalid YAML: {error}") from error
+
+
+def parse_plugin_items(
+    spec: Union[str, dict, list, None], source: str = "plugin"
+) -> list[PluginItem]:
+    """
+    Turn a plugin's item description into a list of ``PluginItem`` objects.
+
+    ``spec`` may be YAML text (with a top-level ``Items:`` list), an already parsed
+    dict/list, or - for backwards compatibility - a list of ready-made ``PluginItem``
+    objects (which is passed through unchanged). Raises ``ValueError`` with a message
+    naming ``source`` and the offending item if anything is malformed.
+    """
+    spec = _load_yaml(spec, source)
+
+    if isinstance(spec, dict):
+        matches = [value for key, value in spec.items() if _norm(key) == "items"]
+        if not matches:
+            raise ValueError(f"{source}: YAML must contain a top-level 'Items:' list")
+        spec = matches[0]
+
+    if spec is None:
+        return []
+    if not isinstance(spec, list):
+        raise ValueError(f"{source}: 'Items' must be a list, got {type(spec).__name__}")
+
+    items: list[PluginItem] = []
+    seen_keys: set[str] = set()
+
+    for index, element in enumerate(spec, start=1):
+        where = f"{source}, item #{index}"
+
+        if isinstance(element, PluginItem):
+            item = element
+        elif isinstance(element, str):  # bare "- Separator"
+            item = _build_item(element, None, where)
+        elif isinstance(element, dict) and len(element) == 1:  # "- CheckBox: {...}"
+            ((type_name, options),) = element.items()
+            item = _build_item(type_name, options, where)
+        else:
+            raise ValueError(
+                f"{where}: expected 'TypeName' or a single 'TypeName: {{options}}' mapping, "
+                f"got {element!r}"
+            )
+
+        if not isinstance(item, SeparatorItem):
+            if item.key is None or str(item.key).strip() == "":
+                raise ValueError(f"{where}: {type(item).__name__} needs a 'Key'")
+            item.key = str(item.key)
+            if item.key in seen_keys:
+                raise ValueError(f"{where}: duplicate key '{item.key}'")
+            seen_keys.add(item.key)
+            if item.label is None:
+                item.label = item.key
+
+        items.append(item)
+
+    return items
+
+
+@dataclass
+class PluginSpec:
+    """Everything a plugin's YAML document describes."""
+
+    key: str
+    title: str
+    items: list[PluginItem]
+    columns: int = 5
+    enabled: bool = True
+
+
+_PLUGIN_SECTION_OPTIONS = {"key": "key", "title": "title", "enabled": "enabled"}
+_BOX_SECTION_OPTIONS = {"columns": "columns"}
+
+
+def _read_section(value: Any, section: str, allowed: dict[str, str], source: str) -> dict[str, Any]:
+    """Return ``{option: value}`` for a ``Plugin:`` / ``Box:`` section, rejecting unknown options."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{source}: '{section}' must be a mapping of options")
+
+    result: dict[str, Any] = {}
+    for raw_key, option_value in value.items():
+        name = allowed.get(_norm(raw_key))
+        if name is None:
+            raise ValueError(
+                f"{source}: unknown option '{raw_key}' in '{section}' "
+                f"(valid: {', '.join(sorted(allowed.values()))})"
+            )
+        result[name] = option_value
+    return result
+
+
+def parse_plugin_spec(spec: Union[str, dict], source: str = "plugin") -> PluginSpec:
+    """
+    Parse a plugin's YAML document (``Plugin:`` / ``Box:`` / ``Items:`` sections) into a
+    ``PluginSpec``. Only ``Plugin: Key`` is mandatory. Raises ``ValueError`` with a message
+    naming the plugin and the offending section/item if anything is malformed.
+    """
+    data = _load_yaml(spec, source)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"{source}: expected a YAML mapping with 'Plugin:', 'Box:' and 'Items:' sections"
+        )
+
+    sections: dict[str, Any] = {}
+    for name, value in data.items():
+        normalized = _norm(name)
+        if normalized not in ("plugin", "box", "items"):
+            raise ValueError(
+                f"{source}: unknown section '{name}' (valid: Plugin, Box, Items)"
+            )
+        sections[normalized] = value
+
+    plugin = _read_section(sections.get("plugin"), "Plugin", _PLUGIN_SECTION_OPTIONS, source)
+    key = plugin.get("key")
+    if key is None or str(key).strip() == "":
+        raise ValueError(f"{source}: the 'Plugin' section needs a 'Key'")
+    key = str(key).strip()
+    source = f"plugin '{key}'"  # from here on, errors name the plugin
+
+    title = plugin.get("title")
+    title = key if title is None else str(title)
+
+    enabled = plugin.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ValueError(f"{source}: 'Enabled' must be true or false, got {enabled!r}")
+
+    box = _read_section(sections.get("box"), "Box", _BOX_SECTION_OPTIONS, source)
+    columns = box.get("columns", 5)
+    if isinstance(columns, bool) or not isinstance(columns, int) or columns < 1:
+        raise ValueError(f"{source}: 'Columns' must be a positive integer, got {columns!r}")
+
+    items = parse_plugin_items(sections.get("items"), source)
+
+    return PluginSpec(key=key, title=title, items=items, columns=columns, enabled=enabled)
+
+
+# ------------------------------------------------------------------------------------------
+class ElidedLabel(QLabel):
+    """
+    Single-line label that prefers to show its full text but, when its column is too
+    narrow, shrinks and elides the end with an ellipsis instead of forcing the whole
+    plugin box wider. When elided, the full text is available as a tooltip.
+    """
+
+    _MIN_CHARS = 8  # roughly how much of the text stays readable at the smallest size
+
+    def __init__(self, text: str = "", parent: Optional[QWidget] = None, auto_tooltip: bool = True):
+        super().__init__(text, parent)
+        self._auto_tooltip = auto_tooltip
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+
+    def minimumSizeHint(self) -> QSize:
+        metrics = self.fontMetrics()
+        text = self.text()
+        full = metrics.horizontalAdvance(text)
+        shortest = full
+        if len(text) > self._MIN_CHARS:
+            shortest = metrics.horizontalAdvance(text[: self._MIN_CHARS] + "\u2026")
+        hint = super().sizeHint()
+        return QSize(hint.width() - full + min(full, shortest), hint.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._auto_tooltip:
+            elided = self.fontMetrics().horizontalAdvance(self.text()) > self.contentsRect().width()
+            self.setToolTip(self.text() if elided else "")
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        rect = self.contentsRect()
+        text = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, rect.width())
+        self.style().drawItemText(
+            painter,
+            rect,
+            int(self.alignment()),
+            self.palette(),
+            self.isEnabled(),
+            text,
+            self.foregroundRole(),
+        )
+
+
 # ------------------------------------------------------------------------------------------
 class PluginConfigBox(QGroupBox):
     """
@@ -373,11 +747,13 @@ class PluginConfigBox(QGroupBox):
         has_load: bool = False,
         has_process: bool = False,
         columns: int = 5,
+        context: Optional[BatchContext] = None,
     ):
         super().__init__(title, parent)
 
         self.items = list(items or [])
         self.columns = max(1, columns)
+        self.context = context
         self.widgets: dict[str, QWidget] = {}
         self.item_by_key: dict[str, PluginItem] = {
             item.key: item
@@ -394,11 +770,9 @@ class PluginConfigBox(QGroupBox):
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(4)
 
-        for col in range(self.columns):
-            grid.setColumnStretch(col, 1)
-
         row = 0
         column = 0
+        used_columns = 0  # rightmost grid column any item actually occupies
 
         for item in self.items:
             if isinstance(item, SeparatorItem):
@@ -411,7 +785,7 @@ class PluginConfigBox(QGroupBox):
                 row += 1
                 continue
 
-            widget = item.create_widget()
+            widget = item.create_widget(self.context)
             if widget is None:
                 continue
 
@@ -420,7 +794,7 @@ class PluginConfigBox(QGroupBox):
                 column = 0
                 row += 1
 
-            label = QLabel(item.label)
+            label = ElidedLabel(item.label or "", auto_tooltip=not item.tooltip)
             if item.tooltip:
                 label.setToolTip(item.tooltip)
                 widget.setToolTip(item.tooltip)
@@ -429,7 +803,6 @@ class PluginConfigBox(QGroupBox):
             cell.setContentsMargins(0, 0, 0, 0)
             cell.setSpacing(6)
 
-            label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
             if isinstance(widget, QCheckBox):
                 widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             else:
@@ -449,6 +822,7 @@ class PluginConfigBox(QGroupBox):
             container.setLayout(cell)
 
             grid.addWidget(container, row, column, 1, span)
+            used_columns = max(used_columns, column + span)
             self.widgets[item.key] = widget
 
             item.bind_widget(widget, lambda value, key: self.valueChanged.emit(key, value))
@@ -457,6 +831,12 @@ class PluginConfigBox(QGroupBox):
             if column >= self.columns:
                 column = 0
                 row += 1
+
+        # Only columns that hold something share the width. Columns no item ever reaches
+        # (e.g. columns=6 but nothing beyond column 4) get no stretch, so they don't
+        # steal space from the labels and widgets that do exist.
+        for col in range(self.columns):
+            grid.setColumnStretch(col, 1 if col < used_columns else 0)
 
         main_layout.addLayout(grid)
 
@@ -531,7 +911,7 @@ class BatchPlugin:
             plugin_config={},
         )
 
-    def set_up(self, key: str, title: str, items: PluginItem, columns: int = 5, plugin_config: dict = {}):
+    def set_up(self, key: str, title: str, items: list[PluginItem], columns: int = 5, plugin_config: dict = {}):
         """Called once after construction to bind this instance to its registry entry."""
         self.plugin_items = items
         self.key_name = key
@@ -557,6 +937,7 @@ class BatchPlugin:
             has_load=has_load,
             has_process=has_process,
             columns=self.columns,
+            context=self.context
         )
 
         if has_process:
@@ -643,7 +1024,7 @@ class BatchPluginEntry:
     plugin_cls: Type[BatchPlugin]
     key: str
     title: str
-    items: "PluginItem"
+    items: list[PluginItem]
     columns: int = 5
     enabled: bool = True
 
@@ -674,19 +1055,53 @@ class BatchPluginRegistry:
     # ------------------------------------------------------------------
     @classmethod
     def register(
-        cls, key: str, title: str, items: "PluginItem", columns: int = 5, enabled: bool = True
+        cls,
+        spec: Union[str, dict, None] = None,
+        *,
+        key: Optional[str] = None,
+        title: Optional[str] = None,
+        items: Union[str, dict, list[PluginItem], None] = None,
+        columns: int = 5,
+        enabled: bool = True,
     ):
-        """Class decorator: wraps a ``BatchPlugin`` subclass and registers its metadata."""
+        """
+        Class decorator: wraps a ``BatchPlugin`` subclass and registers its metadata.
+
+        Normal use passes one YAML document that describes the whole plugin (see
+        ``parse_plugin_spec``)::
+
+            @BatchPluginRegistry.register(calibration_items)
+            class CalibratePlugin(BatchPlugin): ...
+
+        The YAML is parsed and validated right here, so a mistake is reported when the
+        plugin module is loaded. The older keyword form
+        ``register(key=..., title=..., items=..., columns=...)`` still works.
+        """
+        if spec is not None:
+            plugin_spec = parse_plugin_spec(spec)
+        elif key is not None:
+            plugin_spec = PluginSpec(
+                key=key,
+                title=title if title is not None else key,
+                items=parse_plugin_items(items, source=f"plugin '{key}'"),
+                columns=columns,
+                enabled=enabled,
+            )
+        else:
+            raise TypeError(
+                "register() needs a YAML plugin definition, e.g. "
+                "@BatchPluginRegistry.register(calibration_items)"
+            )
 
         def decorator(plugin_cls: Type[BatchPlugin]):
             cls._entries.append(
                 BatchPluginEntry(
                     plugin_cls=plugin_cls,
-                    key=key,
-                    title=title,
-                    items=items,
-                    columns=columns,
-                    enabled=enabled,
+                    key=plugin_spec.key,
+                    title=plugin_spec.title,
+                    items=plugin_spec.items,
+                    columns=plugin_spec.columns,
+                    enabled=plugin_spec.enabled,
                 )
             )
             return plugin_cls
@@ -1188,6 +1603,29 @@ class PluginContainer(QWidget):
         return result
 
     # ==================================================================
+    # Refresh Plugins
+    # ==================================================================
+    def refresh_plugin_widgets(self):
+        """Baut die Benutzeroberflächen aller aktiven Plugins neu auf, um geänderte Config-Werte zu laden."""
+        for instance in self.instances:
+            # 1. Aktuelle Benutzereingaben sichern
+            current_config = instance.widget.get_config()
+            
+            # 2. Altes Widget aus dem Zeilen-Layout entfernen und löschen
+            row_layout = instance.row.layout()
+            row_layout.removeWidget(instance.widget)
+            instance.widget.deleteLater()
+            
+            # 3. Neues Widget mit aktualisiertem Context generieren
+            instance.widget = instance.instance.create_plugin_box()
+            
+            # 4. Vorherige Werte wiederherstellen (sofern sie noch in den neuen Listen existieren)
+            instance.widget.set_config(current_config)
+            
+            # 5. Widget wieder ganz links in die Zeile einfügen
+            row_layout.insertWidget(0, instance.widget, 1, Qt.AlignmentFlag.AlignTop)
+
+    # ==================================================================
     # CLEAR ALL PLUGINS
     # ==================================================================
 
@@ -1234,65 +1672,6 @@ class PluginContainer(QWidget):
         # --------------------------------------------------------------
 
         self._show_empty_label()
-
-    # # ==================================================================
-    # # LOAD CONFIGURATION
-    # # ==================================================================
-
-    # def load_config(
-    #     self,
-    #     plugins_config: list[dict],
-    # ):
-    #     """Replace the current batch with the plugins described by ``plugins_config``
-    #     (the same shape produced by ``get_config``)."""
-
-    #     # --------------------------------------------------------------
-    #     # Remove current plugins
-    #     # --------------------------------------------------------------
-
-    #     self.clear_plugins()
-
-    #     if not plugins_config:
-    #         return
-
-    #     # --------------------------------------------------------------
-    #     # Restore plugins
-    #     # --------------------------------------------------------------
-
-    #     for plugin_data in plugins_config:
-
-    #         if not isinstance(
-    #             plugin_data,
-    #             dict,
-    #         ):
-    #             continue
-
-    #         key = plugin_data.get("key")
-
-    #         if not key:
-    #             continue
-
-    #         entry = self.registry.get(key)
-
-    #         if entry is None:
-
-    #             self.siril.log(
-    #                 f"Plugin not found: {key}",
-    #                 LogColor.RED,
-    #             )
-
-    #             continue
-
-    #         plugin_config = plugin_data.get(
-    #             "config",
-    #             {},
-    #         )
-
-    #         self.add_plugin(
-    #             entry,
-    #             plugin_config=plugin_config,
-    #         )
-
 
 class PluginList(QListWidget):
     """
@@ -1413,7 +1792,11 @@ class Batch(QMainWindow):
         if index >= 0:
             self.telescope_combo.setCurrentIndex(index)
 
-        self.telescope_combo.currentTextChanged.connect( self.config.set_selected_telescope )
+        def on_telescope_changed(self,name):
+            self.config.set_selected_telescope(name)
+            self.plugin_container.refresh_plugin_widgets()
+
+        self.telescope_combo.currentTextChanged.connect(on_telescope_changed)
 
         info_layout.addWidget(QLabel("Telescope:"))
         info_layout.addWidget(self.telescope_combo)
@@ -1566,13 +1949,11 @@ class Batch(QMainWindow):
             for item in self.plugin_container.get_config()
         ]
 
-        if not isinstance(self.presets, dict):
-            self.presets = {}
-        batches = self.presets.setdefault("Batches", {})
+        batches = self.config.get_value("Batches", {})
         is_new = name not in batches
         batches[name] = entries
 
-        self.config.storePresets(self.presets)
+        self.config.storePresets({"Batches": batches})
 
         if is_new:
             self.batch_combo.addItem(name)
@@ -1663,9 +2044,12 @@ def load_plugins(plugin_dir: str) -> None:
         if file.stem.startswith("_"):
             continue  # e.g. skip __init__.py
         print(f"load {file.name}")
-        spec = importlib.util.spec_from_file_location(file.stem, file)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        try:
+            spec = importlib.util.spec_from_file_location(file.stem, file)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as error:  # e.g. a malformed YAML item definition
+            print(f"Skipping plugin {file.name}: {error}")
 
 
 def sirilBatch(argv):

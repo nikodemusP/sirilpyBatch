@@ -1,47 +1,56 @@
-import shutil
-from pathlib import Path
-from dataclasses import dataclass
-from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry, CheckboxItem, ComboBoxItem, FloatItem, IntItem, PluginItem, SeparatorItem
+from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry
 from sirilpy import LogColor
 
-calibration_items = [
-    CheckboxItem(
-        key="plade",          
-        label="Pladesolve",
-        colspan=2,
-        default=True),
-    SeparatorItem(),
-    CheckboxItem(
-        key="pcc", 
-        label="Photometric Color Calibration", 
-        colspan=2,
-        default=False),
-    CheckboxItem(
-        key="spcc",      
-        label="Spectrophotometric Color Calibration",      
-        colspan=2,
-        default=False),
-    SeparatorItem(),
-    ComboBoxItem(
-        key="catalogue",
-        label="Catalogue",
-        values=["none","apass", "localgaia", "gaia","nomad"],
-        default="gaia",
-    ),
-    IntItem(
-        key="bgtol_lower",    
-        label="Tolerance Low",    
-        colspan=1,
-        default=0),
-    IntItem(
-        key="bgtol_upper",   
-        label="High",   
-        colspan=1,
-        default=2),
-    SeparatorItem(),
-]
+Plugin_Config = """
+Plugin:
+    Key: color_calibration
+    Title: Color Calibration
+Box:
+    Columns: 6
+Items:
+    - CheckBox:
+        Key: plade
+        Label: Pladesolve
+        Default: True
+    - Separator
+    - CheckBox:
+        Key: pcc
+        Label: Photometric Color Calibration
+        Default: False
+    - Separator
+    - ComboBox:
+        Key: pcc_catalogue
+        Label: Catalogue
+        Values: ["none", "apass", "localgaia", "gaia", "nomad"]
+        Default: gaia
+    - IntRange:
+        Key: pcc_bgtol
+        Label: Tolerance
+        Default: 0,2
+    - Separator
+    - CheckBox:
+        Key: spcc
+        Label: Spectrophotometric Color Calibration
+        Default: False
+    - Separator
+    - ComboBox:
+        Key: spcc_catalogue
+        Label: Catalogue
+        Values: ["none", "apass", "localgaia", "gaia", "nomad"]
+        Default: gaia
+    - ComboBox:
+        Key: spcc_filter
+        Label: Filter
+        Values: "@telescope.filter"
+        Default: No Filter
+    - IntRange:
+        Key: spcc_bgtol
+        Label: Tolerance
+        Default: 0,2
+"""
 
-@BatchPluginRegistry.register(key="color_calibration", title="Color Calibration", items=calibration_items, columns=6)
+
+@BatchPluginRegistry.register(Plugin_Config)
 class CalibratePlugin(BatchPlugin):
 
     result_name = "calibration"
@@ -61,9 +70,8 @@ class CalibratePlugin(BatchPlugin):
 
     def pcc(self):
         args = ["pcc"]
-        low = int(self.get_value("bgtol_lower"))
-        high = int(self.get_value("bgtol_upper"))
-        catalog = self.get_value("catalogue")
+        low, high = self.get_value("pcc_bgtol")
+        catalog = self.get_value("pcc_catalogue")
 
         if catalog != "none":
             args.append(f"-catalog={catalog}")
@@ -72,9 +80,7 @@ class CalibratePlugin(BatchPlugin):
         self.cmd(*args)
 
     def spcc(self):
-        args = ["spcc"]
-        low = int(self.get_value("bgtol_lower"))
-        high = int(self.get_value("bgtol_upper"))
+        low, high = self.get_value("spcc_bgtol")
         sensor = self.get_config("telescope.sensor","")
 
         self.cmd("spcc",

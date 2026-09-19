@@ -1,40 +1,37 @@
 import shutil
 from pathlib import Path
 from dataclasses import dataclass
-from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry, CheckboxItem, IntItem, PluginItem, SeparatorItem
+from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry
 from sirilpy import LogColor
 
-calibrate_items = [
-    CheckboxItem(
-        key="cfa",          
-        label="CFA format",
-        colspan=2,
-        default=False),
-    CheckboxItem(
-        key="equalize_cfa", 
-        label="equalize CFA", 
-        colspan=2,
-        default=False),
-    CheckboxItem(
-        key="debayer",      
-        label="Debayer",      
-        colspan=2,
-        default=False),
-    SeparatorItem(
-        key="sep1"),
-    IntItem(
-        key="sigma_low",    
-        label="Sigma Low",    
-        colspan=2,
-        default=3),
-    IntItem(
-        key="sigma_high",   
-        label="Sigma High",   
-        colspan=2,
-        default=3),
-]
 
-@BatchPluginRegistry.register(key="calibrate", title="Calibrate", items=calibrate_items, columns=6)
+Plugin_Config = """
+Plugin:
+    Key: calibrate
+    Title: Prepare
+Box:
+    Columns: 6
+Items:
+    - CheckBox:
+        Key: cfa
+        Label: CFA format
+        Default: False
+    - CheckBox:
+        Key: equalize_cfa
+        Label: equalize CFA
+        Default: False
+    - CheckBox:
+        Key: debayer
+        Label: Debayer
+        Default: False
+    - Separator
+    - IntRange:
+        Key: sigma
+        Label: Sigma
+        Default: 3,3
+"""
+
+@BatchPluginRegistry.register(Plugin_Config)
 class CalibratePlugin(BatchPlugin):
 
     result_name = "calibration"

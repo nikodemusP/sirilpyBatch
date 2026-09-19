@@ -2,12 +2,13 @@ import shutil
 from pathlib import Path
 from dataclasses import dataclass
 from sirilpy import LogColor
+from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry
 
-from PyQt6.QtWidgets import (
-    QCheckBox,
-)
-
-from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry, PluginItem
+Plugin_Config = """
+Plugin:
+    Key: sorter
+    Title: Sort Files
+"""
 
 @dataclass
 class sirilFolder:
@@ -23,7 +24,7 @@ dir_config = [
     sirilFolder(fileName="dark",  targetDir="darks",  master_name="dark_master", moved=0),
     sirilFolder(fileName="flat",  targetDir="flats",  master_name="flat_master", moved=0)]
 
-@BatchPluginRegistry.register(key="sorter", title="Sort Files", items=None)
+@BatchPluginRegistry.register(Plugin_Config)
 class OriginMark2FileSorter(BatchPlugin):
 
     def process(self):
