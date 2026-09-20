@@ -1,5 +1,5 @@
-from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry
-from sirilpy import LogColor
+from sirilpy import LogColor # type: ignore
+from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
 
 Plugin_Config = """
 Plugin:
@@ -34,19 +34,15 @@ Items:
         Default: False
     - Separator
     - ComboBox:
-        Key: spcc_catalogue
-        Label: Catalogue
-        Values: ["none", "apass", "localgaia", "gaia", "nomad"]
-        Default: gaia
-    - ComboBox:
         Key: spcc_filter
         Label: Filter
         Values: "@telescope.filter"
         Default: No Filter
-    - IntRange:
+    - FloatRange:
         Key: spcc_bgtol
         Label: Tolerance
-        Default: 0,2
+        Default: [2.0,2.8]
+        Step: 0.1
 """
 
 
@@ -80,13 +76,14 @@ class CalibratePlugin(BatchPlugin):
         self.cmd(*args)
 
     def spcc(self):
+        filter = self.get_value("spcc_filter")
         low, high = self.get_value("spcc_bgtol")
         sensor = self.get_config("telescope.sensor","")
-
+        filterCfg = self.get_config(f"filterCfg.{filter}",'-oscfilter="No filter"')
         self.cmd("spcc",
                  f"\"-oscsensor={sensor}\"",
-                 f"\"-oscfilter=No filter\"",
-                 f"-bgtol={low},{high}")
+                 f"\"{filterCfg}\"",
+                 f"\"-bgtol={low},{high}\"")
 
     def load(self):
         wd = self.get_siril_wd()

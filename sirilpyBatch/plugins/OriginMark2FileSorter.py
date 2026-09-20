@@ -1,8 +1,8 @@
 import shutil
 from pathlib import Path
 from dataclasses import dataclass
-from sirilpy import LogColor
-from sirilpyBatch.sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpy import LogColor # type: ignore
+from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
 
 Plugin_Config = """
 Plugin:

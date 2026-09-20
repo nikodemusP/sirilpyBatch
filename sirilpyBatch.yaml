@@ -11,20 +11,22 @@ Batches:
       - 3
     plugin: calibrate
   - config:
-      bgtol:
+      pcc: false
+      pcc_bgtol:
       - 0
       - 2
-      catalogue: gaia
-      pcc: false
+      pcc_catalogue: gaia
       plade: true
-      spcc: false
+      spcc: true
+      spcc_bgtol:
+      - 0
+      - 2
+      spcc_filter: No Filter
     plugin: color_calibration
 telescope:
   filter:
-    No Filter (Broadband):
-    - -oscfilter="UV/IR Block"
-    No filter:
-    - -oscfilter="No filter"
+  - No Filter
+  - No Filter (Broadband)
   focalLen: 335
   name: Celestron Origin Smart Mark 2
   pixelSize: 2.0

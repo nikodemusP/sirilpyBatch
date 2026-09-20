@@ -1,95 +1,73 @@
+filterCfg:
+    'Astro filter (UV/IR)': ['-oscfilter=UV/IR Block']
+    'Dual-Band': ['-narrowband','-rwl=656.28','-rbw=18','-gwl=500.70','-gbw=30','-bwl=500.70','-bbw=30']
+    'LP (Narrowband)': ['-oscfilter=ZWO Seestar LP']
+    'No Filter (Broadband)': ['-oscfilter=UV/IR Block']
+    'No filter': ['-oscfilter=No filter']
+
 telescopes:
   - name: 'ZWO Seestar S30'
     sensor: Sony IMX585
     focalLen: 150
     pixelSize: 2.9
     filter: ['No Filter (Broadband)','LP (Narrowband)']
-    filters:
-        'No Filter (Broadband)': ['-oscfilter="UV/IR Block"']
-        'LP (Narrowband)': ['-oscfilter="ZWO Seestar LP"']
 
   - name: 'ZWO Seestar S30 Pro'
     sensor: Sony IMX585
     focalLen: 150
     pixelSize: 2.9
     filter: ['No Filter (Broadband)','LP (Narrowband)']
-    filters:
-        'No Filter (Broadband)': ['-oscfilter="UV/IR Block"']
-        'LP (Narrowband)': ['-oscfilter="ZWO Seestar LP"']
 
   - name: 'ZWO Seestar S50'
     sensor: Sony IMX585
     focalLen: 250
     pixelSize: 2.9
     filter: ['No Filter (Broadband)','LP (Narrowband)']
-    filters:
-        'No Filter (Broadband)': ['-oscfilter="UV/IR Block"']
-        'LP (Narrowband)': ['-oscfilter="ZWO Seestar LP"']
 
   - name: 'Dwarf Mini'
     sensor: Sony IMX662
     focalLen: 100
     pixelSize: 2.9
     filter: ['Astro filter (UV/IR)','Dual-Band']
-    filter:
-        'Astro filter (UV/IR)': ['-oscfilter="UV/IR Block"']
-        'Dual-Band': ['-narrowband','-rwl=656.28','-rbw=18','-gwl=500.70','-gbw=30','-bwl=500.70','-bbw=30']
 
   - name: 'Dwarf 3'
     sensor: Sony IMX678
     focalLen: 150
     pixelSize: 2.0
     filter: ['Astro filter (UV/IR)','Dual-Band']
-    filter:
-        'Astro filter (UV/IR)': ['-oscfilter="UV/IR Block"']
-        'Dual-Band': ['-narrowband','-rwl=656.28','-rbw=18','-gwl=500.70','-gbw=30','-bwl=500.70','-bbw=30']
 
   - name: 'Dwarf 2'
     sensor: Sony IMX678
     focalLen: 100
     pixelSize: 1.45
     filter: ['Astro filter (UV/IR)']
-    filter:
-        'Astro filter (UV/IR)': ['-oscfilter="UV/IR Block"']
 
   - name: 'Celestron Origin Smart Mark 1'
     sensor: Sony IMX178
     focalLen: 335
     pixelSize: 2.4
     filter: ['No Filter','No Filter (Broadband)']
-    filter:
-        'No filter': ['-oscfilter="No filter"']
-        'No Filter (Broadband)': ['-oscfilter="UV/IR Block"']
 
   - name: 'Celestron Origin Smart Mark 2'
     sensor: Sony IMX678
     focalLen: 335
     pixelSize: 2.0
     filter: ['No Filter','No Filter (Broadband)']
-    filter:
-        'No filter': ['-oscfilter="No filter"']
-        'No Filter (Broadband)': ['-oscfilter="UV/IR Block"']
 
   - name: 'Unistellar eVscope 1 / eQuinox 1'
     sensor: Sony IMX224
     focalLen: 450
     pixelSize: 3.75
     filter: ['No Filter']
-    filter:
-        'No filter': ['-oscfilter="No filter"']
 
   - name: 'Unistellar eVscope 2 / eQuinox 2'
     sensor: Sony IMX415
     focalLen: 450
     pixelSize: 1.45
     filter: ['No Filter']
-    filter:
-        'No filter': ['-oscfilter="No filter"']
 
   - name: 'Unistellar Odyssey / Odyssey Pro'
     sensor: Sony IMX415
     focalLen: 320
     pixelSize: 1.45
     filter: ['No Filter']
-    filter:
-        'No filter': ['-oscfilter="No filter"']
