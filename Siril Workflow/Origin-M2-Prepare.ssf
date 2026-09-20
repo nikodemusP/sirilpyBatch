@@ -1,13 +1,11 @@
 requires 1.2.0
 
-# Lights in eine Sequenz konvertieren
+# convert lights
 cd lights
 convert light -out=../process
 cd ../process
 
-# Direkte Kalibrierung gegen die vorhandenen Origin-Master
-# -cfa/-debayer: Bayer-Daten bleiben bis nach der Kalibrierung roh
-# -equalize_cfa: gleicht Farbkanal-Ungleichgewicht im Flat aus
+# calibrate the lights with  the bias/dark/flat master
 calibrate light -bias=../masters/bias_master -dark=../masters/dark_master -flat=../masters/flat_master -cfa -equalize_cfa -debayer
 
 # Ausrichtung der kalibrierten, debayerten Lights
@@ -16,7 +14,13 @@ register pp_light
 # Stacken mit Ausreißer-Ablehnung und additiver Skalierung
 stack r_pp_light rej 3 3 -norm=addscale -output_norm -rgb_equal -out=result
 
-# Ergebnis laden und automatisch strecken (nur zur Vorschau)
+# Ergebnis laden
 load result
-autostretch
+
+# Plattenlösung + echte Farbkalibrierung anhand Sternkatalog (Gaia)
+# Braucht Internet. Falls FOCALLEN/XPIXSZ im FITS-Header fehlen, ggf.
+# "platesolve -focal=<mm> -pixelsize=<µm>" statt "platesolve" nutzen.
+platesolve
+pcc
+
 save result_stretched

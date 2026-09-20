@@ -1,0 +1,23 @@
+requires 1.2.0
+
+cd process
+
+load result_stretched
+
+# Sterne entfernen. -stretch: Bild ist noch linear, StarNet
+# stretcht intern für die Erkennung und rechnet danach zurück.
+# Erzeugt starless_result.fits und stars_result.fits
+starnet
+
+# Starloses Bild laden und entrauschen (NL-Bayes)
+load starless_result_stretched
+denoise
+save starless_result_stretched_denoised
+
+# Sternmaske wieder addieren: starloses+entrauschtes Bild + Sterne
+# Hinweis: exakte PixelMath-Syntax ggf. mit "help pm" prüfen, falls
+# deine Siril-Version eine andere Variablen-Schreibweise erwartet.
+pm "$starless_result_stretched_denoised$ + $starless_result_stretched$"
+save result_stretched
+
+load result_stretched

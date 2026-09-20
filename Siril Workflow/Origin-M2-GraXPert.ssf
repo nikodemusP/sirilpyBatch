@@ -1,0 +1,25 @@
+requires 1.2.0
+
+cd process
+
+load result_stretched
+
+# KI-Hintergrundextraktion, oft deutlich besser gegen Fixed-Pattern-
+# Muster als das klassische subsky/seqsubsky weiter oben.
+pyscript GraXpert-AI.py -bge -smoothing=0.5 -correction=subtraction
+
+# KI-Entrauschung, arbeitet auf dem gesamten Bild inkl. Sterne und
+# schont dabei feine Strukturen deutlich besser als klassische
+# Entrauschung - daher kein StarNet/Sternentfernung nötig.
+pyscript GraXpert-AI.py -denoise -strength=0.6
+
+# WICHTIG: -linked statt normalem autostretch, sonst wird jeder
+# Farbkanal unabhängig auf denselben Grauwert normiert -> Bild
+# wirkt grau, weil die reale Farbdifferenz zwischen R/G/B verloren geht
+autostretch -linked
+
+# leichte Sättigungsanhebung, entspricht in etwa dem "Vivid"-Look
+# der Origin-App-Nachbearbeitung
+satu 0.3
+
+save result_stretched
