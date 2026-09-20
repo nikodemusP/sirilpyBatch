@@ -1,4 +1,7 @@
-from copy import deepcopy
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Nikolas Pommerening
+# Contact: nikodemus.p@gmx.at
+#
 from dataclasses import dataclass, field
 from typing import Any, Optional, Type
 

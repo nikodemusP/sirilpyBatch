@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Nikolas Pommerening
+# Contact: nikodemus.p@gmx.at
+#
 from copy import deepcopy
 from pathlib import Path
 import sys

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Nikolas Pommerening
+# Contact: nikodemus.p@gmx.at
+#
 import shutil
 from pathlib import Path
 from dataclasses import dataclass

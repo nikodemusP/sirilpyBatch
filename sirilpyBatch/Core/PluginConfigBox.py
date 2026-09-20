@@ -1,4 +1,7 @@
-from copy import deepcopy
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Nikolas Pommerening
+# Contact: nikodemus.p@gmx.at
+#
 from typing import Any, Optional
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal

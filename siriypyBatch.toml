@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=77"]  # 77+ needed for SPDX `license` + `license-files`
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sirilpybatch"
+# Keep in sync with sirilpyBatch/__init__.py and sirilpyBatch/Core/Version.py
+version = "0.1.0"
+description = "Drag-and-drop batch processing for Siril, extendable through small plugins."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+keywords = ["siril", "sirilpy", "astrophotography", "batch-processing", "pyqt6"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+
+# NOTE: "sirilpy" is intentionally NOT listed. It is not published on PyPI;
+# it is provided by Siril itself (Siril 1.4 or newer) inside Siril's own venv.
+#
+# TODO: add `authors` and `[project.urls]` once you have decided on them.
+dependencies = [
+    "PyQt6",
+    "PyYAML",
+]
+
+[project.optional-dependencies]
+# sirilBatch.py asks Siril to install these as well (s.ensure_installed), so
+# plugins can rely on them. The core code itself does not import them.
+plugins = [
+    "numpy",
+    "astropy",
+]
+
+# There is deliberately no [project.scripts] entry: the application connects to a
+# *running* Siril instance and is meant to be launched from Siril's Scripts menu
+# via sirilBatch.py (see README.md).
+
+[tool.setuptools]
+py-modules = ["sirilBatch"]
+packages = ["sirilpyBatch", "sirilpyBatch.Core", "sirilpyBatch.Plugins", "sirilpyBatch.cfg"]
+
+[tool.setuptools.package-data]
+# Plugins are loaded from disk by file path (not imported as a package), which is why
+# sirilpyBatch.Plugins and sirilpyBatch.cfg have no __init__.py but are still listed
+# above so their files ship. The telescope/filter configuration is a plain YAML file.
+"sirilpyBatch.cfg" = ["*.yaml"]
