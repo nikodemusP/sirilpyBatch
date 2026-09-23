@@ -3,7 +3,7 @@
 # Contact: nikodemus.p@gmx.at
 #
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
+from sirilpyBatch import BatchPlugin, BatchPluginRegistry, BatchCmd
 
 
 Plugin_Config = """
@@ -40,33 +40,23 @@ class CalibratePlugin(BatchPlugin):
     def process(self):
         # ── 1) Convert Lights ─────────────────────────────
         self.context.siril.log(f"[INFO] prepare light", LogColor.GREEN)
-        self.cmd("cd","lights")
-        self.cmd("convert","light","-out=../process")
-        self.cmd("cd","../process")
+        self.cmd("cd","lights").run()
+        self.cmd("convert","light","-out=../process").run()
+        self.cmd("cd","../process").run()
 
         # ── 2) Calibrate the images ─────────────────────────────
-        args = ["calibrate","light","-bias=../masters/bias_master","-dark=../masters/dark_master","-flat=../masters/flat_master"]
-        if self.get_value("cfa"):
-            args.append("-cfa ")
-        if self.get_value("equalize_cfa"):
-            args.append("-equalize_cfa")
-        if self.get_value("debayer"):
-            args.append("-debayer")
-        self.context.siril.log(f"[INFO] calibrate", LogColor.GREEN)
-        self.cmd(*args)        
-
+        (
+            self.cmd("calibrate","light","-bias=../masters/bias_master","-dark=../masters/dark_master","-flat=../masters/flat_master")
+            .add_opt("-cfa",self.get_value("cfa"))
+            .add_opt("-equalize_cfa",self.get_value("equalize_cfa"))
+            .add_opt("-debayer",self.get_value("debayer"))
+            .run()
+        )
         # ── 2) register ─────────────────────────────
-        self.cmd("register","pp_light")
+        self.cmd("register","pp_light").run()
         # ── 3) stack the images ─────────────────────────────
-        self.cmd("stack",
-                 "r_pp_light",
-                 "rej","3","3",
-                 "-norm=addscale",
-                 "-output_norm",
-                 "-rgb_equal",
-                 f"-out={self.result_name}"
-                )
+        self.cmd("stack","r_pp_light","rej","3","3","-norm=addscale","-output_norm","-rgb_equal",f"-out={self.result_name}").run()
 
     def load(self):
         wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}")
+        self.cmd("load", f"{wd}/process/{self.result_name}").run()

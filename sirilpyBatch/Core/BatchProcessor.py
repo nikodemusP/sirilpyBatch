@@ -645,7 +645,7 @@ class Batch(QMainWindow):
     def createWindow(self):
         """Build the main layout: info panel, plugin sidebar, drop-target batch area, footer."""
         self.setWindowTitle(f"{APP_NAME} - v{VERSION}")
-        self.resize(900, 600)
+        self.resize(900, 800)
 
         central = QWidget()
 

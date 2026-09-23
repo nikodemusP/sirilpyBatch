@@ -10,9 +10,9 @@ APP_NAME = __app_name__
 from .sirilpyBatch import execute
 
 from .sirilpyBatch import execute
-from .Core.BatchPlugin import BatchPlugin
+from .Core.BatchPlugin import BatchPlugin, BatchCmd
 from .Core.Registry import BatchPluginRegistry 
 
 # (Optional) Control what gets imported with "from sirilpyBatch import *"
-__all__ = ["execute", "BatchPlugin", "BatchPluginRegistry", "VERSION", "APP_NAME"]
+__all__ = ["execute", "BatchPlugin", "BatchPluginRegistry", "BatchCmd", "VERSION", "APP_NAME"]
 

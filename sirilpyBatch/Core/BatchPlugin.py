@@ -11,6 +11,51 @@ from .PluginItem import PluginItem
 from .BatchContext import BatchContext 
 from .BatchConfig import BatchConfig 
 
+class BatchCmd:
+    def __init__(self, siril):
+        self.siril = siril
+        self.args = []
+
+    def append(self, *args):
+        if args:
+            self.args.extend(args)
+        return self
+
+    def add_arg(self, template, *values):
+        """
+        Format `template` with one or more values and append it as one arg.
+
+        Supports:
+        add_arg("-bias={}", value)              # single value
+        add_arg("-catalog={},{}", low, high)     # multiple positional values
+        add_arg("-catalog={},{}", (low, high))   # single tuple/list, unpacked
+        """
+        if not values:
+            return self
+
+        # unwrap a single tuple/list argument into multiple values
+        if len(values) == 1 and isinstance(values[0], (tuple, list)):
+            values = tuple(values[0])
+
+        if any(v is None for v in values):
+            return self
+
+        self.args.append(f'"{template.format(*values)}"')
+        return self
+
+    def add_opt(self, option, condition):
+        if condition:
+            self.args.append(option)
+        return self
+
+    def run(self):
+        self.siril.log(f"[CMD] {' '.join(self.args)}", LogColor.GREEN)
+        return self.siril.cmd(*self.args)
+
+    def __iter__(self):
+        return iter(self.args)
+
+    
 class BatchPlugin:
     """
     Abstract base class for all batch plugins.
@@ -28,6 +73,7 @@ class BatchPlugin:
         self.context = BatchContext(
             siril=siril,
             config=config,
+            work_dir=siril.get_siril_wd(),
             plugin_config={},
         )
 
@@ -67,11 +113,6 @@ class BatchPlugin:
 
         return self.box
 
-    def cmd(self, *args):
-        """Run a single Siril command, logging it first."""
-        self.context.siril.log(f"[CMD] {' '.join(args)}", LogColor.GREEN)
-        self.context.siril.cmd(*args)
-
     def get_key_name(self):
         """Returns the internal registry key of the plugin."""
         return self.key_name
@@ -80,21 +121,24 @@ class BatchPlugin:
         """Returns the display title of the plugin."""
         return self.title
 
+    def cmd(self, *args) -> BatchCmd:
+        return BatchCmd(self.context.siril).append(*args)
+    
     def _on_process(self):
         """
         Handler for the "Process" button: runs ``process()``, always returns
         to the original working directory afterwards, then runs ``load()``
         (if defined) so the result is immediately reflected in the UI.
         """
-        workdir = self.get_siril_wd()
+        self.cmd("cd", self.context.work_dir).run()
         has_load = type(self).load is not BatchPlugin.load
         try:
             self.process()
+            if has_load:
+                self.load()
         except Exception as e:
             self.context.siril.log(f"Error during execution: {e}", LogColor.RED)
-        self.cmd("cd", workdir)
-        if has_load:
-            self.load()
+        self.cmd("cd", self.context.work_dir).run()
 
     def _on_load(self):
         """Handler for the "Load" button."""
@@ -114,7 +158,7 @@ class BatchPlugin:
 
     def get_siril_wd(self):
         """Convenience accessor for Siril's current working directory."""
-        return self.context.siril.get_siril_wd()
+        return self.context.work_dir
 
     def get_config(self, key: str, default):
         return self.context.config.get_value(key,default)

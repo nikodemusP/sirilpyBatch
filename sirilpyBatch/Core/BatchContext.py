@@ -19,5 +19,6 @@ class BatchContext:
 
     siril: Any
     config: BatchConfig
+    work_dir: str
     plugin_config: dict
 

@@ -11,6 +11,10 @@ Batches:
       - 3
     plugin: calibrate
   - config:
+      ai_version: 3.0.2
+      gpu: true
+    plugin: graxpert_denoise
+  - config:
       pcc: false
       pcc_bgtol:
       - 0
@@ -19,8 +23,8 @@ Batches:
       plade: true
       spcc: true
       spcc_bgtol:
-      - 0
-      - 2
+      - 0.0
+      - 2.0
       spcc_filter: No Filter
     plugin: color_calibration
 telescope:
