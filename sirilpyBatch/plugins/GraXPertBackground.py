@@ -10,27 +10,25 @@ Plugin:
 Box:
     Columns: 4
 Items:
-    - Text:
+    - ComboBox:
         Key: model
         Label: Model version
-        Default: ""
+        Values: ["1.0.0","1.0.1"]
+        Default: "1.0.1"
     - CheckBox:
         Key: gpu
         Label: use GPU
         Default: True
-    - CheckBox:
-        Key: keep_bg
-        Label: keep background
-        Default: False
     - Separator
-    - FloatRange:
-        Key: strength
-        Label: Strength
-        Default: [0,0.1]
+    - FloatItem:
+        Key: smoothing
+        Label: Smooting
+        Default: 0.5
+        Step: 0.1
     - ComboBox:
         Key: correction
         Label: Correction
-        Options: [subtraction, division]
+        Values: ["subtraction", "division"]
         Default: subtraction
 """
 
@@ -45,7 +43,7 @@ class GraXpertBackgroundPlugin(BatchPlugin):
             cmd.add_arg("-model={}", model)
 
         cmd.add_opt("-nogpu", not self.get_value("gpu"))
-        cmd.add_opt("-keep-bg", self.get_value("keep_bg"))
+        cmd.add_opt("-gpu", self.get_value("gpu"))
         cmd.add_arg("-smoothing={}", self.get_value("smoothing"))
         cmd.add_arg("-correction={}", self.get_value("correction"))
 

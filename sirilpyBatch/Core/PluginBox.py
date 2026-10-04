@@ -67,7 +67,7 @@ class ElidedLabel(QLabel):
         )
 
 # ------------------------------------------------------------------------------------------
-class PluginConfigBox(QGroupBox):
+class PluginBox(QGroupBox):
     """
     A checkable group box that renders a plugin's ``PluginItem`` list as a
     grid of labeled widgets, plus an optional "Load" and/or "Process" button.

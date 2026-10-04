@@ -11,22 +11,16 @@ Batches:
       - 3
     plugin: calibrate
   - config:
-      ai_version: 3.0.2
       gpu: true
+      model: 3.0.2
+      strength: 0.5
     plugin: graxpert_denoise
   - config:
-      pcc: false
-      pcc_bgtol:
-      - 0
-      - 2
-      pcc_catalogue: gaia
-      plade: true
-      spcc: true
-      spcc_bgtol:
-      - 0.0
-      - 2.0
-      spcc_filter: No Filter
-    plugin: color_calibration
+      correction: subtraction
+      gpu: true
+      model: 1.0.1
+      smoothing: 0.5
+    plugin: graxpert_bge
 telescope:
   filter:
   - No Filter

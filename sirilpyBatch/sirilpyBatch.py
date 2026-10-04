@@ -61,7 +61,6 @@ def load_plugins(plugin_dir: str) -> None:
     ``BatchPluginRegistry._entries``.
     """
     plugin_path = pathlib.Path(plugin_dir)
-    print(f"{plugin_path.absolute()}")
     for file in plugin_path.glob("*.py"):
         if file.stem.startswith("_"):
             continue  # e.g. skip __init__.py

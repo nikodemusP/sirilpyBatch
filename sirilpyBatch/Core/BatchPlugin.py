@@ -2,18 +2,18 @@
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
-from typing import Any
+from typing import Any, Callable
 
 from sirilpy import LogColor # type: ignore
 
-from .PluginConfigBox import PluginConfigBox
+from .PluginBox import PluginBox
 from .PluginItem import PluginItem
 from .BatchContext import BatchContext 
 from .BatchConfig import BatchConfig 
 
 class BatchCmd:
-    def __init__(self, siril):
-        self.siril = siril
+    def __init__(self, cmd: Callable[..., None]):
+        self.cmd = cmd
         self.args = []
 
     def append(self, *args):
@@ -49,8 +49,7 @@ class BatchCmd:
         return self
 
     def run(self):
-        self.siril.log(f"[CMD] {' '.join(self.args)}", LogColor.GREEN)
-        return self.siril.cmd(*self.args)
+        return self.cmd(*self.args)
 
     def __iter__(self):
         return iter(self.args)
@@ -76,6 +75,7 @@ class BatchPlugin:
             work_dir=siril.get_siril_wd(),
             plugin_config={},
         )
+        self.cmd_cb=None
 
     def set_up(self, key: str, title: str, items: list[PluginItem], columns: int = 5, plugin_config: dict | None = None):
         """Called once after construction to bind this instance to its registry entry."""
@@ -85,6 +85,7 @@ class BatchPlugin:
         self.columns = columns
         self.context.plugin_config = plugin_config if plugin_config is not None else {}
         self.context.siril.log(f"setup plugin: {self.title}", LogColor.GREEN)
+
 
     def create_plugin_box(self):
         """
@@ -97,7 +98,7 @@ class BatchPlugin:
         has_process = type(self).process is not BatchPlugin.process
         has_load = type(self).load is not BatchPlugin.load
 
-        self.box = PluginConfigBox(
+        self.box = PluginBox(
             self.title,
             self.plugin_items,
             has_load=has_load,
@@ -122,14 +123,16 @@ class BatchPlugin:
         return self.title
 
     def cmd(self, *args) -> BatchCmd:
-        return BatchCmd(self.context.siril).append(*args)
-    
-    def _on_process(self):
+        return BatchCmd(self.cmd_cb).append(*args)
+
+
+    def execute(self, cmd_cb: Callable[..., None]):
         """
         Handler for the "Process" button: runs ``process()``, always returns
         to the original working directory afterwards, then runs ``load()``
         (if defined) so the result is immediately reflected in the UI.
         """
+        self.cmd_cb = cmd_cb
         self.cmd("cd", self.context.work_dir).run()
         has_load = type(self).load is not BatchPlugin.load
         try:
@@ -139,6 +142,9 @@ class BatchPlugin:
         except Exception as e:
             self.context.siril.log(f"Error during execution: {e}", LogColor.RED)
         self.cmd("cd", self.context.work_dir).run()
+    
+    def _on_process(self):
+        self.execute(lambda *args: self.context.siril.cmd(*args))
 
     def _on_load(self):
         """Handler for the "Load" button."""

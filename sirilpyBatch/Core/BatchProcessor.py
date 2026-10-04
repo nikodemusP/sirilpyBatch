@@ -3,7 +3,7 @@
 # Contact: nikodemus.p@gmx.at
 #
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import sirilpy as s # type: ignore
 from sirilpy import LogColor # type: ignore
@@ -31,7 +31,7 @@ from .PluginItem import PluginItem
 from .BatchConfig import BatchConfig
 from .Registry import BatchPluginRegistry
 from .PluginEntry import BatchPluginEntry  # re-exported for backwards compatibility
-from .PluginConfigBox import PluginConfigBox
+from .PluginBox import PluginBox
 from .BatchPlugin import BatchPlugin
 
 
@@ -47,7 +47,7 @@ class BatchPluginInstance:
 
     entry: BatchPluginEntry
     instance: BatchPlugin
-    widget: PluginConfigBox
+    widget: PluginBox
     row: Optional[QWidget] = None
 
 
@@ -277,7 +277,7 @@ class PluginContainer(QWidget):
     # ==================================================================
     # RUN THE PLUGINS
     # ==================================================================
-    def run_plugins(self):
+    def run_plugins(self, cmd: Callable[..., None]):
         """Execute all configured plugins sequentially in their displayed order."""
         for instance in list(self.instances):
             self.siril.log(
@@ -287,12 +287,13 @@ class PluginContainer(QWidget):
 
             try:
                 # Uses the same process/load behavior as the plugin's Process button.
-                instance.instance._on_process()
+                instance.instance.execute(cmd)
             except Exception as error:
                 self.siril.log(
                     f"Error running plugin {instance.entry.title}: {error}",
                     LogColor.RED,
                 )
+
     # ==================================================================
     # CREATE PLUGIN ROW
     # ==================================================================
@@ -860,7 +861,19 @@ class Batch(QMainWindow):
         """Run every plugin instance sequentially."""
         self.run_button.setEnabled(False)
         try:
-            self.plugin_container.run_plugins()
+            self.plugin_container.run_plugins(lambda *args: self.siril.cmd(*args))
+        finally:
+            self.run_button.setEnabled(True)
+
+    def _export(self):
+        """Exports the current batch."""
+        self.run_button.setEnabled(False)
+        try:
+            cmds = []
+            self.plugin_container.run_plugins(lambda *args: cmds.append(args))
+            text = "\n".join(" ".join(args) for args in cmds)
+
+            print(f"\n------------------------------------------------\n{text}\n------------------------------------------------\n")
         finally:
             self.run_button.setEnabled(True)
 
@@ -870,12 +883,12 @@ class Batch(QMainWindow):
         footer.setContentsMargins(12, 10, 12, 12)
         footer.setSpacing(8)
 
-        #        help_button = QPushButton("Help")
-        #        help_button.setMinimumWidth(50)
-        #        help_button.setMinimumHeight(35)
-        #        help_button.setToolTip("Show help information and frequently asked questions")
-        #        help_button.clicked.connect(self.show_help)
-        #        button_layout.addWidget(help_button)
+        export_button = QPushButton("Export")
+        export_button.setMinimumWidth(50)
+        export_button.setMinimumHeight(35)
+        export_button.setToolTip("Exports the batch to ssf")
+        export_button.clicked.connect(self._export)
+        footer.addWidget(export_button)
 
         save_presets_button = QPushButton("Save Presets")
         save_presets_button.setMinimumWidth(80)
