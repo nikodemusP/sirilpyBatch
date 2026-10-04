@@ -98,6 +98,8 @@ class BatchPlugin:
         has_process = type(self).process is not BatchPlugin.process
         has_load = type(self).load is not BatchPlugin.load
 
+        self._resolve_callbacks()
+
         self.box = PluginBox(
             self.title,
             self.plugin_items,
@@ -113,6 +115,22 @@ class BatchPlugin:
             self.box.loadRequested.connect(self._on_load)
 
         return self.box
+
+    def _resolve_callbacks(self):
+        """Turn ``onChange: method_name`` of each item into a bound method of this plugin."""
+        for item in self.plugin_items:
+            name = getattr(item, "onChange", None)
+            if not name or item.callback is not None:
+                continue
+            method = getattr(self, str(name), None)
+            if callable(method):
+                item.callback = method  # called as method(value, key)
+            else:
+                self.context.siril.log(
+                    f"{self.title}: onChange '{name}' for '{item.key}' is not a method of "
+                    f"{type(self).__name__}",
+                    LogColor.RED,
+                )
 
     def get_key_name(self):
         """Returns the internal registry key of the plugin."""

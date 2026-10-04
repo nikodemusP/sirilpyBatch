@@ -43,7 +43,6 @@ class GraXpertBackgroundPlugin(BatchPlugin):
             cmd.add_arg("-model={}", model)
 
         cmd.add_opt("-nogpu", not self.get_value("gpu"))
-        cmd.add_opt("-gpu", self.get_value("gpu"))
         cmd.add_arg("-smoothing={}", self.get_value("smoothing"))
         cmd.add_arg("-correction={}", self.get_value("correction"))
 

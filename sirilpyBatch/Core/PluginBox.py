@@ -163,7 +163,7 @@ class PluginBox(QGroupBox):
             used_columns = max(used_columns, column + span)
             self.widgets[item.key] = widget
 
-            item.bind_widget(widget, lambda value, key: self.valueChanged.emit(key, value))
+            item.bind_widget(widget, self._make_change_handler(item))
 
             column += span
             if column >= self.columns:
@@ -197,6 +197,14 @@ class PluginBox(QGroupBox):
         if has_load or has_process:
             main_layout.addLayout(buttons)
 
+    def _make_change_handler(self, item: PluginItem):
+        """Emit valueChanged and, if the item defines one, call its own callback."""
+        def handler(value, key):
+            self.valueChanged.emit(key, value)
+            if item.callback is not None:
+                item.callback(value, key)
+        return handler
+
     def get_value(self, key: str) -> Any:
         widget = self.widgets.get(key)
         item = self.item_by_key.get(key)
@@ -211,7 +219,7 @@ class PluginBox(QGroupBox):
             return
 
         for item in self.items:
-            if isinstance(item, SeparatorItem):
+            if isinstance(item, SeparatorItem) or not item.save:
                 continue
             if item.key not in config:
                 continue
@@ -223,7 +231,7 @@ class PluginBox(QGroupBox):
     def get_config(self) -> dict[str, Any]:
         cfg: dict[str, Any] = {}
         for item in self.items:
-            if isinstance(item, SeparatorItem):
+            if isinstance(item, SeparatorItem) or not item.save:
                 continue
             cfg[item.key] = self.get_value(item.key)
         return cfg
