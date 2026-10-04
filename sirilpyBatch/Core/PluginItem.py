@@ -3,7 +3,7 @@
 # Contact: nikodemus.p@gmx.at
 #
 from dataclasses import dataclass, field
-from typing import Any, Optional, Type
+from typing import Any, Callable, Optional, Type
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -15,7 +15,10 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QComboBox,
     QSpinBox,
+    QPushButton,
+    QFileDialog,
 )
+import os
 
 from .BatchContext import BatchContext
 
@@ -47,6 +50,11 @@ class PluginItem:
     colspan: int = 1  # how many grid columns this item's cell should occupy (e.g. for a
     # wide text field); clamped to the box's total column count and will
     # wrap to a new row if it doesn't fit in the remaining space.
+    callback: Optional[Callable[[Any, str], None]] = None  # called as callback(value, key)
+    # whenever this item's value changes (in addition to PluginBox.valueChanged)
+    save: bool = True  # False: value is neither written to nor restored from the plugin config
+    onChange: Optional[str] = None  # name of a method on the owning plugin (e.g. from YAML);
+    # BatchPlugin.create_plugin_box resolves it and stores the bound method in ``callback``.
 
 
 
@@ -188,6 +196,53 @@ class TextItem(PluginItem):
         widget.setText(str(value))
 
 @dataclass
+class DirectoryItem(PluginItem):
+    """Text field holding a directory path plus a button that opens a folder dialog."""
+    dialog_title: str = "Select directory"
+    button_text: str = "…"
+
+    def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        widget.edit = QLineEdit()
+        widget.button = QPushButton(self.button_text)
+        widget.button.setToolTip(self.dialog_title)
+        widget.button.setFixedWidth(30)
+
+        resolved_default = resolve_config_value(self.default, context)
+        if resolved_default is not None:
+            widget.edit.setText(str(resolved_default))
+
+        def browse():
+            start = widget.edit.text().strip()
+            if not os.path.isdir(start):
+                start = os.path.expanduser("~")
+            path = QFileDialog.getExistingDirectory(widget, self.dialog_title, start)
+            if path:  # empty string means the dialog was cancelled
+                widget.edit.setText(path)
+
+        widget.button.clicked.connect(browse)
+
+        layout.addWidget(widget.edit, 1)
+        layout.addWidget(widget.button)
+        return widget
+
+    def bind_widget(self, widget, callback):
+        widget.edit.textChanged.connect(
+            lambda value, key=self.key: callback(value, key)
+        )
+
+    def get_value(self, widget):
+        return widget.edit.text()
+
+    def set_value(self, widget, value):
+        widget.edit.setText("" if value is None else str(value))
+
+
+@dataclass
 class ComboBoxItem(PluginItem):
     values: list[Any] = field(default_factory=list)
 
@@ -316,6 +371,9 @@ ITEM_TYPES: dict[str, Type[PluginItem]] = {
     "combobox": ComboBoxItem,
     "combo": ComboBoxItem,
     "text": TextItem,
+    "directory": DirectoryItem,
+    "dir": DirectoryItem,
+    "folder": DirectoryItem,
     "int": IntItem,
     "integer": IntItem,
     "float": FloatItem,
@@ -324,3 +382,24 @@ ITEM_TYPES: dict[str, Type[PluginItem]] = {
     "intrange": IntRangeItem,
     "floatrange": FloatRangeItem,
 }
+
+
+def registerItem(*names: str):
+    """
+    Class decorator that makes a ``PluginItem`` subclass usable from a plugin's YAML.
+
+    Lets a plugin ship its own item types instead of adding them to this file::
+
+        @register_item("frametable")
+        @dataclass
+        class FrameTableItem(PluginItem): ...
+
+    The YAML name is matched case-insensitively. Register *before* the plugin class is
+    decorated with ``@BatchPluginRegistry.register`` so the type is known when the YAML
+    is parsed.
+    """
+    def decorator(cls: Type[PluginItem]) -> Type[PluginItem]:
+        for name in names:
+            ITEM_TYPES[name.lower()] = cls
+        return cls
+    return decorator

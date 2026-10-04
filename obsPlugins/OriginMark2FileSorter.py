@@ -33,15 +33,15 @@ class OriginMark2FileSorter(BatchPlugin):
 
     def process(self):
         # ── 1) Working-Directory ────────────────────────────────
-        workdir = Path(self.get_siril_wd())
-        self.context.siril.log(f"[INFO] Working Directory: {workdir}", LogColor.GREEN)
+        work_dir = Path(self.get_siril_wd())
+        self.context.siril.log(f"[INFO] Working Directory: {work_dir}", LogColor.GREEN)
 
         # ── 2) sort files into lights/biases/darks/flats ──
         for sirilFolder in dir_config:
             sirilFolder.moved = 0
-            (workdir / sirilFolder.targetDir).mkdir(exist_ok=True)
+            (work_dir / sirilFolder.targetDir).mkdir(exist_ok=True)
             self.context.siril.log(f"[OK]   Ordner: {sirilFolder.targetDir}/", LogColor.GREEN)
-            for f in sorted(workdir.iterdir()):
+            for f in sorted(work_dir.iterdir()):
                 if not f.is_file():
                     continue
 
@@ -53,7 +53,7 @@ class OriginMark2FileSorter(BatchPlugin):
                     continue
 
                 # Move the file to the target directory and rename it to lowercase
-                shutil.move(str(f), str(workdir / sirilFolder.targetDir / f.name.lower()))
+                shutil.move(str(f), str(work_dir / sirilFolder.targetDir / f.name.lower()))
                 self.context.siril.log(f"[OK]   {f.name}  →  {sirilFolder.targetDir}/", LogColor.GREEN)
                 sirilFolder.moved += 1
 
@@ -61,9 +61,9 @@ class OriginMark2FileSorter(BatchPlugin):
             self.context.siril.log(f"[INFO] {sirilFolder.fileName.capitalize()}-Frames: {sirilFolder.moved}", LogColor.GREEN)
 
         # ── 3) create process directories and cleanup ─────────────────────
-        masters_dir = workdir / "masters"
+        masters_dir = work_dir / "masters"
         self.reset_dir(masters_dir)
-        self.reset_dir(workdir / "process")
+        self.reset_dir(work_dir / "process")
 
         # ── 4) build Master-Calidration ─────────────────────
         self.context.siril.log(f"[INFO] building the master calibration files...", LogColor.GREEN)
@@ -90,9 +90,9 @@ class OriginMark2FileSorter(BatchPlugin):
     #   - 1 file   -> simply copied & renamed (Origin already provides an internally stacked file, no re-stacking needed)
     #   - >1 files -> stacked into a real master
     def build_master(self, sirilFolder: sirilFolder):
-        workdir = Path(self.get_siril_wd())
-        masters_dir = workdir / "masters"
-        src_dir = workdir / sirilFolder.targetDir
+        work_dir = Path(self.get_siril_wd())
+        masters_dir = work_dir / "masters"
+        src_dir = work_dir / sirilFolder.targetDir
         files = self.fits_files(src_dir)
         n = len(files)
         target_name = sirilFolder.master_name
@@ -108,7 +108,7 @@ class OriginMark2FileSorter(BatchPlugin):
             return dst_file
 
         # --- mehrere Subframes: in Siril konvertieren und stacken ---
-        self.cmd(f'cd "{workdir}"')
+        self.cmd(f'cd "{work_dir}"')
         self.cmd(f"cd {sirilFolder.targetDir}")
         self.cmd(f"convert {sirilFolder.fileName} -out=../process")
         self.cmd("cd ../process")
@@ -130,9 +130,9 @@ class OriginMark2FileSorter(BatchPlugin):
             self.cmd(f"stack {sirilFolder.fileName} rej 3 3 -nonorm")
             stacked_name = f"{sirilFolder.fileName}_stacked.fits"
 
-        self.cmd(f'cd "{workdir}"')
+        self.cmd(f'cd "{work_dir}"')
 
-        stacked_path = workdir / "process" / stacked_name
+        stacked_path = work_dir / "process" / stacked_name
         dst_file = masters_dir / f"{sirilFolder.master_name}.fits"
         if stacked_path.exists():
             shutil.move(str(stacked_path), str(dst_file))

@@ -59,35 +59,37 @@ class CalibratePlugin(BatchPlugin):
         # ── 1) Convert Lights ─────────────────────────────
         self.context.siril.log(f"[INFO] plade solve", LogColor.GREEN)
 
-        self.cmd("cd","process")
+        self.cmd("cd","process").run()
+
         if self.get_value("plade"):
-            self.cmd("platesolve")
+            self.cmd("platesolve").run()
+
         if self.get_value("pcc"):
             self.pcc()
+
         if self.get_value("spcc"):
             self.spcc()
+
         self.cmd("save","result_calibration")
 
     def pcc(self):
-        args = ["pcc"]
-        low, high = self.get_value("pcc_bgtol")
-        catalog = self.get_value("pcc_catalogue")
+        (
+            self.cmd("pcc")
+            .add_arg("-catalog={}",self.get_value("pcc_catalogue"))
+            .add_arg("-bgtol={},{}",self.get_value("pcc_bgtol"))
+            .run()
+        )
 
-        if catalog != "none":
-            args.append(f"-catalog={catalog}")
-        else:
-            args.append(f"-bgtol={low},{high}")
-        self.cmd(*args)
 
     def spcc(self):
-        filter = self.get_value("spcc_filter")
-        low, high = self.get_value("spcc_bgtol")
-        sensor = self.get_config("telescope.sensor","")
-        filterCfg = self.get_config(f"filterCfg.{filter}",'-oscfilter="No filter"')
-        self.cmd("spcc",
-                 f"\"-oscsensor={sensor}\"",
-                 f"\"{filterCfg}\"",
-                 f"\"-bgtol={low},{high}\"")
+        filterCfg = self.get_config(f"filterCfg.{filter}",'-oscfilter=No filter')
+        (
+            self.cmd("spcc")
+            .add_arg("-oscsensor={}",self.get_config("telescope.sensor",""))
+            .add_arg("{}",filterCfg)
+            .add_arg("-bgtol={},{}",self.get_value("spcc_bgtol"))
+            .run()
+        )
 
     def load(self):
         wd = self.get_siril_wd()

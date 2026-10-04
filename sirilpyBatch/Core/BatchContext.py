@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 from .BatchConfig import BatchConfig
 
@@ -19,5 +19,6 @@ class BatchContext:
 
     siril: Any
     config: BatchConfig
+    work_dir: str
     plugin_config: dict
 
