@@ -5,7 +5,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Type
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtWidgets import (
     QLineEdit,
     QSlider,
@@ -201,6 +201,26 @@ class DirectoryItem(PluginItem):
     dialog_title: str = "Select directory"
     button_text: str = "…"
 
+    # The last chosen directory is remembered (also across sessions) so the next folder
+    # dialog doesn't start from the home directory again.
+    # REMEMBER_PARENT: start in the *parent* of the last choice, which shows the sibling
+    # folders (Lights / Darks / Flats / Bias next to each other). False: start in the
+    # chosen folder itself.
+    REMEMBER_PARENT = True
+    _SETTINGS = ("sirilpyBatch", "sirilpyBatch")  # organisation, application
+    _LAST_KEY = "DirectoryItem/lastDirectory"
+
+    @classmethod
+    def last_directory(cls) -> str:
+        """Start directory for the next dialog ('' if nothing usable is remembered)."""
+        value = str(QSettings(*cls._SETTINGS).value(cls._LAST_KEY, "") or "")
+        return value if os.path.isdir(value) else ""
+
+    @classmethod
+    def remember_directory(cls, path: str):
+        folder = os.path.dirname(os.path.normpath(path)) if cls.REMEMBER_PARENT else path
+        QSettings(*cls._SETTINGS).setValue(cls._LAST_KEY, folder)
+
     def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
         widget = QWidget()
         layout = QHBoxLayout(widget)
@@ -219,10 +239,11 @@ class DirectoryItem(PluginItem):
         def browse():
             start = widget.edit.text().strip()
             if not os.path.isdir(start):
-                start = os.path.expanduser("~")
+                start = self.last_directory() or os.path.expanduser("~")
             path = QFileDialog.getExistingDirectory(widget, self.dialog_title, start)
             if path:  # empty string means the dialog was cancelled
                 widget.edit.setText(path)
+                self.remember_directory(path)
 
         widget.button.clicked.connect(browse)
 
