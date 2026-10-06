@@ -9,7 +9,7 @@ version = "0.1.0"
 description = "Drag-and-drop batch processing for Siril, extendable through small plugins."
 readme = "README.md"
 license = "GPL-3.0-or-later"
-license-files = ["LICENSE"]
+license-files = ["LICENSE.txt"]
 requires-python = ">=3.10"
 keywords = ["siril", "sirilpy", "astrophotography", "batch-processing", "pyqt6"]
 classifiers = [
@@ -46,10 +46,13 @@ plugins = [
 
 [tool.setuptools]
 py-modules = ["sirilBatch"]
-packages = ["sirilpyBatch", "sirilpyBatch.Core", "sirilpyBatch.Plugins", "sirilpyBatch.cfg"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["sirilpyBatch*"]
+namespaces = true
 
 [tool.setuptools.package-data]
-# Plugins are loaded from disk by file path (not imported as a package), which is why
-# sirilpyBatch.Plugins and sirilpyBatch.cfg have no __init__.py but are still listed
-# above so their files ship. The telescope/filter configuration is a plain YAML file.
+# `plugins/` and `cfg/` are not regular Python packages, so use namespace-package
+# discovery and include the YAML files shipped with the app.
 "sirilpyBatch.cfg" = ["*.yaml"]

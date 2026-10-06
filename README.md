@@ -21,13 +21,12 @@ Every processing step is a small **plugin**: one Python file plus a short YAML b
 | Python | 3.10 or newer (Siril manages its own Python venv) |
 | PyQt6, PyYAML | installed automatically on first start |
 
-`sirilBatch.py` calls `sirilpy.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml")`, so Siril installs the dependencies into its own virtual environment the first time the script runs. `sirilpy` itself comes with Siril and is not installed from PyPI.
+`sirilBatch.py` calls `sirilpy.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml", "sirilpyBatch")`, so Siril installs the dependencies into its own virtual environment the first time the script runs. `sirilpy` itself comes with Siril and is not installed from PyPI.
 
 ## Installation
 
-1. Copy `sirilBatch.py` **and** the `sirilpyBatch/` folder into a directory of your choice. Keep them side by side.
-2. In Siril open **Preferences → Scripts** and add that directory to **Script Storage Directories**.
-3. Click the refresh icon (or run `reloadscripts` in Siril's command line) and press **Apply**.
+1. Copy `sirilBatch.py` into your script directory of your choice. 
+2. Click the refresh icon (or run `reloadscripts` in Siril's command line) and press **Apply**.
 4. `sirilBatch.py` now appears in Siril's **Scripts** menu. You can also start it once via **Scripts → Run Script Files…** without registering the folder.
 
 > Don't store it inside Siril's built-in scripts folder. Custom scripts there can be wiped by a Siril update.
@@ -66,30 +65,19 @@ For each plugin, top to bottom:
 
 ## Working directory layout
 
-The bundled plugins expect this structure inside the Siril working directory:
-
-```text
-<working directory>/
-├── light_*.fit(s), bias_*.fit(s), dark_*.fit(s), flat_*.fit(s)   ← raw files (input)
-├── lights/  biases/  darks/  flats/     ← created by "Sort Files"
-├── masters/                             ← bias_master, dark_master, flat_master
-└── process/                             ← converted, calibrated, registered and stacked frames
-```
-
-> ⚠️ **"Sort Files" (based on the Celestron Image-Directory) deletes and recreates `masters/` and `process/`** every time it runs. It also *moves* the matching raw files into their target folders (renamed to lowercase).
+There is no specific working-directory. The sirilpyBatch creates a process directory within you workspace.
 
 ## Bundled plugins
 
 | Title | Key | What it does |
 | --- | --- | --- |
-| **Sort Files** | `sorter` | Moves `light*`, `bias*`, `dark*`, `flat*` FITS files into `lights/`, `biases/`, `darks/`, `flats/`, then builds `masters/`. If a folder holds a single file (e.g. an already-stacked master from a Celestron Origin) it is just copied. With several files they are stacked. Flats are bias-calibrated first when a bias master exists. No settings. |
 | **Prepare** | `calibrate` | Converts the lights, calibrates them with the bias/dark/flat masters, registers, and stacks into `process/calibration`. Options: *CFA format*, *equalize CFA*, *Debayer*, *Sigma*. Note: the stack step currently uses fixed `rej 3 3`; the *Sigma* option is not yet passed through. |
 | **Color Calibration** | `color_calibration` | Works in `process/`. Optional plate solving, optional PCC (catalogue: none / apass / localgaia / gaia / nomad; *Tolerance* is used as `-bgtol` when the catalogue is `none`) and optional SPCC. SPCC takes the sensor from the selected telescope and the filter from the *Filter* combo. Saves the result as `result_calibration`. |
+| **GraXPert Background Extractionn** | `graxpert_bge` | GraXPert background extraction
+| **GraXPert Denoisen** | `graxpert_denoise` | Denoise Fits
 
 Todos
 
-[ ] GraXPert Background Extraction
-[ ] GraXPert Denoise
 [ ] Star net
 [ ] Crob
 
@@ -121,8 +109,6 @@ Created next to `sirilBatch.py` the first time you press **Save Presets**. It st
 ```yaml
 Batches:
   seestar_default:
-    - plugin: sorter
-      config: {}
     - plugin: calibrate
       config: {cfa: false, equalize_cfa: false, debayer: true, sigma: [3, 3]}
     - plugin: color_calibration
