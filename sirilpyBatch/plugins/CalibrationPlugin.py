@@ -97,6 +97,7 @@ class FrameDirItem(PluginItem):
     the added directories and the files the user deleted from the tables. The callback
     (``onChange``) receives the same dict; after a click it also contains ``"rescan": [dir]``.
     """
+    labelPos: str = "NONE"  # the button text is the caption, no label left of it
     button_text: str = "+ Frame-Dir"
     dialog_title: str = "Select frame directory"
 
@@ -207,6 +208,7 @@ class FrameTableItem(PluginItem):
     columns: list[str] = field(
         default_factory=lambda: ["File", "Pixel", "Stacks", "Exposure [s]", "ISO"]
     )
+    labelPos: str = "NONE"  # the table has its own title, no label left of it
     title: str = ""  # default: derived from the key (lights_table -> Lights)
     max_rows: int = 6  # visible rows before the table starts to scroll
     save: bool = False  # display-only, never stored in the plugin config

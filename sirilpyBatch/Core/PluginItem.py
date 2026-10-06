@@ -43,7 +43,7 @@ class PluginItem:
     """
     key: str  = None # internal key used to read/write this item's value
     label: str = None  # label for the widget
-    labelPos: str = "LEFT"
+    labelPos: str = "LEFT"  # LEFT | RIGHT | NONE (NONE/HIDDEN: no label, the widget fills the cell)
     default: Any = None
     tooltip: str = ""
     value: Any = None

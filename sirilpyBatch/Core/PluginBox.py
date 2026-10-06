@@ -132,9 +132,15 @@ class PluginBox(QGroupBox):
                 column = 0
                 row += 1
 
-            label = ElidedLabel(item.label or "", auto_tooltip=not item.tooltip)
+            # labelPos NONE / HIDDEN (or an item without label text): no label at all, the
+            # widget uses the whole cell (e.g. buttons and tables that bring their own caption)
+            label_position = (item.labelPos or "LEFT").upper()
+            show_label = label_position not in ("NONE", "HIDDEN") and bool(item.label)
+
+            label = ElidedLabel(item.label, auto_tooltip=not item.tooltip) if show_label else None
             if item.tooltip:
-                label.setToolTip(item.tooltip)
+                if label is not None:
+                    label.setToolTip(item.tooltip)
                 widget.setToolTip(item.tooltip)
 
             cell = QHBoxLayout()
@@ -146,8 +152,12 @@ class PluginBox(QGroupBox):
             else:
                 widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-            label_position = (item.labelPos or "LEFT").upper()
-            if label_position == "RIGHT":
+            if not show_label:
+                is_checkbox = isinstance(widget, QCheckBox)
+                cell.addWidget(widget, 0 if is_checkbox else 1)
+                if is_checkbox:
+                    cell.addStretch(1)
+            elif label_position == "RIGHT":
                 cell.addWidget(widget)
                 cell.addSpacing(4)
                 cell.addWidget(label)
