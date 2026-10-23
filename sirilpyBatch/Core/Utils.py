@@ -89,30 +89,42 @@ def scanDirectory(
     on_error: Optional[Callable[[str, Exception], None]] = None,
 ) -> list[FrameInfo]:
     """
-    Read all FITS files directly inside ``path`` (not recursive), sorted by file name.
+    Recursively read FITS files inside ``path``, sorted by their relative path.
 
     Returns a list of ``FrameInfo(path, frame_type, exposure, iso)``. Files whose header
     can't be read are skipped and reported to ``on_error(path, exception)`` if given.
-    A missing or invalid directory yields an empty list.
+    A missing or invalid directory yields an empty list. Directory traversal does not
+    follow symlinks.
     """
     frames: list[FrameInfo] = []
     if not path or not os.path.isdir(path):
         return frames
 
-    for name in sorted(os.listdir(path)):
-        full = os.path.join(path, name)
-        if not (name.lower().endswith(extensions) and os.path.isfile(full)):
-            continue
-        try:
-            header = read_fits_header(full)
-        except OSError as exc:
-            if on_error:
-                on_error(full, exc)
-            continue
-        frames.append(FrameInfo(
-            path=full,
-            frame_type=frame_type(header),
-            exposure=header_number(header, EXPOSURE_KEYS),
-            iso=header_number(header, ISO_KEYS),
-        ))
+    def report_walk_error(error: OSError):
+        if on_error:
+            on_error(error.filename or path, error)
+
+    for directory, subdirectories, names in os.walk(
+        path, onerror=report_walk_error, followlinks=False
+    ):
+        subdirectories.sort()
+        for name in sorted(names):
+            full = os.path.join(directory, name)
+            if not name.lower().endswith(extensions):
+                continue
+            try:
+                if not os.path.isfile(full):
+                    continue
+                header = read_fits_header(full)
+            except OSError as exc:
+                if on_error:
+                    on_error(full, exc)
+                continue
+            frames.append(FrameInfo(
+                path=full,
+                frame_type=frame_type(header),
+                exposure=header_number(header, EXPOSURE_KEYS),
+                iso=header_number(header, ISO_KEYS),
+            ))
+    frames.sort(key=lambda frame: os.path.relpath(frame.path, path))
     return frames

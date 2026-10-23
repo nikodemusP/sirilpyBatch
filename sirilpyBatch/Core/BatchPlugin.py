@@ -2,9 +2,11 @@
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
+import os
 from typing import Any, Callable
 
 from sirilpy import LogColor # type: ignore
+from PyQt6.QtWidgets import QMessageBox
 
 from .PluginBox import PluginBox
 from .PluginItem import PluginItem
@@ -63,6 +65,7 @@ class BatchPlugin:
     and implement whichever of ``process()`` / ``load()`` they need:
       * ``process()`` runs the plugin's main batch action.
       * ``load()`` runs a lighter "preview/load only" action.
+      * Returning ``False`` from ``process()`` skips the automatic post-process load.
     Whether the "Process" and/or "Load" buttons are shown is decided
     automatically in ``create_plugin_box`` based on which of these methods
     a subclass actually overrides.
@@ -76,6 +79,7 @@ class BatchPlugin:
             plugin_config={},
         )
         self.cmd_cb=None
+        self.original_image: str | None = None
 
     def set_up(self, key: str, title: str, items: list[PluginItem], columns: int = 5, plugin_config: dict | None = None):
         """Called once after construction to bind this instance to its registry entry."""
@@ -143,6 +147,22 @@ class BatchPlugin:
     def cmd(self, *args) -> BatchCmd:
         return BatchCmd(self.cmd_cb).append(*args)
 
+    def confirm(self, title: str, message: str) -> bool:
+        """Show a reusable OK/Cancel confirmation dialog for plugin actions."""
+        answer = QMessageBox.question(
+            getattr(self, "box", None),
+            title,
+            message,
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        return answer == QMessageBox.StandardButton.Ok
+
+    def undo(self):
+        """Reload the image captured when this plugin's process action began."""
+        if not self.original_image:
+            raise RuntimeError("No original image was captured for this process")
+        self.cmd("load", self.original_image).run()
 
     def execute(self, cmd_cb: Callable[..., None]):
         """
@@ -154,8 +174,15 @@ class BatchPlugin:
         self.cmd("cd", self.context.work_dir).run()
         has_load = type(self).load is not BatchPlugin.load
         try:
-            self.process()
-            if has_load:
+            self.original_image = None
+            if self.siril().is_image_loaded():
+                original_image = self.siril().get_image_filename()
+                if original_image:
+                    if not os.path.isabs(original_image):
+                        original_image = os.path.join(self.context.work_dir, original_image)
+                    self.original_image = original_image
+            process_result = self.process()
+            if has_load and process_result is not False:
                 self.load()
         except Exception as e:
             self.context.siril.log(f"Error during execution: {e}", LogColor.RED)

@@ -67,19 +67,23 @@ Items:
         Key: cfa
         Label: CFA format
         Default: False
+        colspan: 2
     - CheckBox:
         Key: equalize_cfa
         Label: equalize CFA
         Default: False
+        colspan: 2
     - CheckBox:
         Key: debayer
         Label: Debayer
         Default: False
+        colspan: 2
     - Separator
     - IntRange:
         Key: sigma
         Label: Sigma
         Default: 3,3
+        colspan: 2
 """
 
 # ------------------------------------------------------------------------------------------
@@ -547,12 +551,13 @@ class CalibratePlugin(BatchPlugin):
                 return key
         return None
 
-    def _target(self, frame, group):
+    def _target(self, frame, group, directory=None):
         """
         (table key or None, label) for a frame found through the "lights" or "frames" button.
 
         The lights button only takes light frames, the frame button only bias/dark/flat;
-        everything else is ignored (None).
+        files without header types are classified by the nearest matching folder in the
+        selected directory tree. Everything else is ignored (None).
         """
         frame_type = frame.frame_type
         if frame_type is None or not str(frame_type).strip():
@@ -560,8 +565,24 @@ class CalibratePlugin(BatchPlugin):
                 return None, "unknown"
             if group == "lights":
                 return "lights", "unknown"
-            folder = os.path.basename(os.path.dirname(os.fspath(frame.path)))
-            key, label = self._type_key(folder), "unknown"
+            folder_path = os.path.dirname(os.fspath(frame.path))
+            folder_names = []
+            root = os.path.normcase(os.path.abspath(directory)) if directory else None
+            current = os.path.normcase(os.path.abspath(folder_path))
+            while current and current != root:
+                folder_names.append(os.path.basename(current))
+                parent = os.path.dirname(current)
+                if parent == current:
+                    break
+                current = parent
+            if root:
+                folder_names.append(os.path.basename(root))
+            key, label = None, "unknown"
+            for name in folder_names:
+                key = self._type_key(name)
+                if key:
+                    label = name
+                    break
         else:
             key, label = self._type_key(frame_type), str(frame_type)
         if group == "lights":
@@ -584,7 +605,7 @@ class CalibratePlugin(BatchPlugin):
         ignored: dict = {}
         frames = self._raw.get(directory, [])
         for frame in frames:
-            target, label = self._target(frame, group)
+            target, label = self._target(frame, group, directory)
             if target is None:
                 ignored[label] = ignored.get(label, 0) + 1
             else:
@@ -609,7 +630,7 @@ class CalibratePlugin(BatchPlugin):
                     path = os.fspath(frame.path)
                     if path in self._removed[group]:
                         continue
-                    target, _label = self._target(frame, group)
+                    target, _label = self._target(frame, group, directory)
                     if target is None or (target, path) in seen:
                         continue
                     seen.add((target, path))
