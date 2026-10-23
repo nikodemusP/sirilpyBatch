@@ -6,9 +6,9 @@ import sys
 
 import sirilpy as s # type: ignore
 
-# Dependencies must be installed BEFORE importing sirilpyBatch, because importing it
+# Dependencies must be installed BEFORE importing sirilpybatch, because importing it
 # pulls in PyQt6 and PyYAML immediately.
-s.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml","sirilpyBatch")
+s.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml","sirilpybatch")
 
 import sirilpyBatch as batch
 
