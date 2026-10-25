@@ -3,12 +3,13 @@
 # Contact: nikodemus.p@gmx.at
 #
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
+from sirilpybatch import BatchPlugin, BatchPluginRegistry 
 
 Plugin_Config = """
 Plugin:
     Key: color_calibration
     Title: Color Calibration
+    targetName: ["pcc","spcc"]
 Box:
     Columns: 6
 Items:
@@ -27,10 +28,10 @@ Items:
         Label: Catalogue
         Values: ["none", "apass", "localgaia", "gaia", "nomad"]
         Default: gaia
-    - IntRange:
+    - FloatRange:
         Key: pcc_bgtol
         Label: Tolerance
-        Default: 0,2
+        Default: -2.8,+2.0
     - Separator
     - CheckBox:
         Key: spcc
@@ -70,8 +71,6 @@ class CalibratePlugin(BatchPlugin):
         if self.get_value("spcc"):
             self.spcc()
 
-        self.cmd("save","result_calibration")
-
     def pcc(self):
         (
             self.cmd("pcc")
@@ -79,6 +78,7 @@ class CalibratePlugin(BatchPlugin):
             .add_arg("-bgtol={},{}",self.get_value("pcc_bgtol"))
             .run()
         )
+        self.save(0)
 
 
     def spcc(self):
@@ -90,7 +90,8 @@ class CalibratePlugin(BatchPlugin):
             .add_arg("-bgtol={},{}",self.get_value("spcc_bgtol"))
             .run()
         )
+        self.save(1)
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}")
+    def getResultFile(self):
+        return 0 if self.get_value("pcc") else 1
+        

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 import textwrap
 from typing import Any, Optional, Type, Union
 
@@ -13,7 +13,12 @@ from .PluginEntry import BatchPluginEntry
 from .PluginItem import ITEM_TYPES, PluginItem, SeparatorItem
 
 
-_PLUGIN_SECTION_OPTIONS = {"key": "key", "title": "title", "enabled": "enabled"}
+_PLUGIN_SECTION_OPTIONS = {
+    "key": "key",
+    "title": "title",
+    "enabled": "enabled",
+    "targetname": "target_names",
+}
 _BOX_SECTION_OPTIONS = {"columns": "columns"}
 
 @dataclass
@@ -25,6 +30,7 @@ class PluginSpec:
     items: list[PluginItem]
     columns: int = 5
     enabled: bool = True
+    target_names: list[str] = field(default_factory=list)
     
 def _norm(name: Any) -> str:
     """Case-insensitive comparison form; ignores ``_``, ``-`` and spaces."""
@@ -190,6 +196,13 @@ def parse_plugin_spec(spec: Union[str, dict], source: str = "plugin") -> PluginS
     if not isinstance(enabled, bool):
         raise ValueError(f"{source}: 'Enabled' must be true or false, got {enabled!r}")
 
+    target_names = plugin.get("target_names", [])
+    if not isinstance(target_names, list) or any(
+        not isinstance(name, str) or not name.strip() for name in target_names
+    ):
+        raise ValueError(f"{source}: 'targetName' must be a list of non-empty strings")
+    target_names = [name.strip() for name in target_names]
+
     box = _read_section(sections.get("box"), "Box", _BOX_SECTION_OPTIONS, source)
     columns = box.get("columns", 5)
     if isinstance(columns, bool) or not isinstance(columns, int) or columns < 1:
@@ -197,7 +210,14 @@ def parse_plugin_spec(spec: Union[str, dict], source: str = "plugin") -> PluginS
 
     items = parse_plugin_items(sections.get("items"), source)
 
-    return PluginSpec(key=key, title=title, items=items, columns=columns, enabled=enabled)
+    return PluginSpec(
+        key=key,
+        title=title,
+        items=items,
+        columns=columns,
+        enabled=enabled,
+        target_names=target_names,
+    )
 
 class BatchPluginRegistry:
     """
@@ -221,6 +241,7 @@ class BatchPluginRegistry:
         items: Union[str, dict, list[PluginItem], None] = None,
         columns: int = 5,
         enabled: bool = True,
+        target_names: Optional[list[str]] = None,
     ):
         """
         Class decorator: wraps a ``BatchPlugin`` subclass and registers its metadata.
@@ -244,6 +265,7 @@ class BatchPluginRegistry:
                 items=parse_plugin_items(items, source=f"plugin '{key}'"),
                 columns=columns,
                 enabled=enabled,
+                target_names=target_names or [],
             )
         else:
             raise TypeError(
@@ -260,6 +282,7 @@ class BatchPluginRegistry:
                     items=plugin_spec.items,
                     columns=plugin_spec.columns,
                     enabled=plugin_spec.enabled,
+                    target_names=plugin_spec.target_names,
                 )
             )
             return plugin_cls

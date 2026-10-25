@@ -16,7 +16,7 @@ class BatchConfig:
     Reads and writes the plugin's on-disk configuration.
 
     Two separate files are involved:
-      * ``sirilpyBatch.yaml``    - user-wide presets, stored in Siril's user data
+      * ``sirilpybatch.yaml``    - user-wide presets, stored in Siril's user data
                                    directory so they survive across projects.
     """
 
@@ -27,7 +27,7 @@ class BatchConfig:
         main = sys.modules["__main__"]
         main_dir = Path(main.__file__).resolve().parent
         cfg_dir = Path(__file__).resolve().parent.parent / "cfg"
-        self.presets_file = main_dir / "sirilpyBatch.yaml"
+        self.presets_file = main_dir / "sirilpybatch.yaml"
         self.global_config_file = cfg_dir / "sirilpyConfig.yaml"
         self._readConfig()
 
@@ -80,7 +80,7 @@ class BatchConfig:
         """Load the user-wide presets file, or None if it doesn't exist yet / fails to parse."""
         self.siril.log(f"read preset config", LogColor.GREEN)
         if not self.presets_file.exists():
-            self.siril.log("Presets file not found: sirilpyBatch.yaml", LogColor.RED)
+            self.siril.log("Presets file not found: sirilpybatch.yaml", LogColor.RED)
             return None
         try:
             with open(self.presets_file, "r") as f:
@@ -92,7 +92,7 @@ class BatchConfig:
             return None
 
     def storePresets(self, config):
-        """Persist the user-wide presets dict to ``sirilpyBatch.yaml``."""
+        """Persist the user-wide presets dict to ``sirilpybatch.yaml``."""
         try:
             # Merge into what is already on disk so keys we weren't handed
             # (anything besides "Batches"/"telescope") are not wiped out.
@@ -113,6 +113,13 @@ class BatchConfig:
 
     def selected_telescope_name(self):
         return self.config.get("telescope", {}).get("name", "")
+
+    def project_name(self):
+        return self.config.get("project_name", "")
+
+    def set_project_name(self, name):
+        cleaned_name = str(name or "").strip()
+        self.config["project_name"] = cleaned_name
 
     def set_selected_telescope(self, name):
         selected_telescope = next(

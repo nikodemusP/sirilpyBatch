@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
 Plugin_Config = """
 Plugin:
     Key: green_noise
     Title: Green Noise
+    targetName: ["gn"]
 Box:
     Columns: 5
 Items:
@@ -36,12 +37,6 @@ Items:
 @BatchPluginRegistry.register(Plugin_Config)
 class GreenNoisePlugin(BatchPlugin):
 
-    result_name = "green_noise"
-
-    def save(self):
-        wd = self.get_siril_wd()
-        self.cmd("save",f"{wd}/process/{self.result_name}").run()
-
     def process(self):
         self.cmd("cd","./process").run()
         green_type = self.get_value("type")
@@ -54,6 +49,5 @@ class GreenNoisePlugin(BatchPlugin):
         cmd.run()
         self.save()
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}").run()
+    def getResultFile(self):
+        return 0

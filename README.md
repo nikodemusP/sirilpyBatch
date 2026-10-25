@@ -1,8 +1,8 @@
-# sirilpyBatch
+# sirilpybatch
 
 A batch-processing front end for [Siril](https://siril.org). Build a processing pipeline by dragging plugins into an ordered list, configure each one in its own settings box, and run the whole chain against your running Siril session. Batches can be saved as named presets and reloaded later.
 
-Every processing step is a small **plugin**: one Python file plus a short YAML block that describes its settings UI. Adding a new step to the batch means dropping a new file into `sirilpyBatch/Plugins/`. Nothing else has to be changed. [`_TemplatePlugin.py`](sirilpyBatch/Plugins/_TemplatePlugin.py) is the starting point.
+Every processing step is a small **plugin**: one Python file plus a short YAML block that describes its settings UI. Adding a new step to the batch means dropping a new file into `sirilpybatch/Plugins/`. Nothing else has to be changed. [`_TemplatePlugin.py`](sirilpybatch/Plugins/_TemplatePlugin.py) is the starting point.
 
 ## Features
 
@@ -21,7 +21,7 @@ Every processing step is a small **plugin**: one Python file plus a short YAML b
 | Python | 3.10 or newer (Siril manages its own Python venv) |
 | PyQt6, PyYAML | installed automatically on first start |
 
-`sirilBatch.py` calls `sirilpy.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml", "sirilpyBatch")`, so Siril installs the dependencies into its own virtual environment the first time the script runs. `sirilpy` itself comes with Siril and is not installed from PyPI.
+`sirilBatch.py` calls `sirilpy.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml", "sirilpybatch")`, so Siril installs the dependencies into its own virtual environment the first time the script runs. `sirilpy` itself comes with Siril and is not installed from PyPI.
 
 ## Installation
 
@@ -65,7 +65,7 @@ For each plugin, top to bottom:
 
 ## Working directory layout
 
-There is no specific working-directory. The sirilpyBatch creates a process directory within you workspace.
+There is no specific working-directory. The sirilpybatch creates a process directory within you workspace.
 
 ## Bundled plugins
 
@@ -83,7 +83,7 @@ Todos
 
 ## Configuration
 
-### Telescope profiles (`sirilpyBatch/cfg/sirilpyConfig.yaml`)
+### Telescope profiles (`sirilpybatch/cfg/sirilpyConfig.yaml`)
 
 Shared, read-only-at-runtime settings that ship with the project:
 
@@ -102,7 +102,7 @@ telescopes:
 
 To support another instrument, add an entry under `telescopes:`. If it uses a filter that isn't listed in `filterCfg:` yet, add that too. Selecting a telescope in the UI copies its entry to the `telescope` key, and plugin boxes are rebuilt so that any `@telescope.…` lists update.
 
-### Presets (`sirilpyBatch.yaml`)
+### Presets (`sirilpybatch.yaml`)
 
 Created next to `sirilBatch.py` the first time you press **Save Presets**. It stores your batches and the selected telescope:
 
@@ -122,14 +122,14 @@ Global and preset files are merged **per top-level key**, with the preset file w
 
 ## Writing your own plugin
 
-1. Copy `sirilpyBatch/Plugins/_TemplatePlugin.py` to a new file in the same folder. Files whose names start with `_` are **not** loaded, so the template itself never shows up in the UI. The new file must not start with `_`.
+1. Copy `sirilpybatch/Plugins/_TemplatePlugin.py` to a new file in the same folder. Files whose names start with `_` are **not** loaded, so the template itself never shows up in the UI. The new file must not start with `_`.
 2. Edit the YAML block (key, title, settings).
 3. Rename the class and implement `process()` and/or `load()`.
 4. Restart the script. The plugin appears under **Available Plugins**.
 
 ```python
 from sirilpy import LogColor  # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 Plugin_Config = """
 Plugin:
@@ -173,6 +173,7 @@ Which buttons a plugin gets depends on what it overrides: implement `process()` 
 | `Plugin:` | `Key` | **Required.** Unique id of the plugin |
 | | `Title` | Display name (defaults to the key) |
 | | `Enabled` | `false` hides the plugin from the list (default `true`) |
+| | `TargetName` | List of output base names, available as `self.target_names` |
 | `Box:` | `Columns` | Number of grid columns for the settings (default `5`) |
 | `Items:` | | List of settings, top to bottom / left to right |
 
@@ -216,17 +217,21 @@ Defaults when omitted: `Min` 0, `Max` 100, `Step` 1, `Decimals` 2.
 | `self.get_siril_wd()` | Siril's current working directory |
 | `self.get_value("key")` | Current value of one of the plugin's settings |
 | `self.get_config("a.b", default)` | Value from the merged global/preset config, e.g. `telescope.sensor` |
+| `self.getOutFile(idx)` | Absolute output path for the `TargetName` at the given zero-based index |
+| `self.getOutFileArg(idx)` | The same output path formatted as a quoted Siril command argument |
 | `self.key_name`, `self.title` | The plugin's key and title |
+| `self.target_names` | Output base names declared by `Plugin: TargetName` |
 
 Each plugin starts in the working directory root (see [What happens during a run](#what-happens-during-a-run)), so use paths relative to it.
+The Prepare plugin writes its stack to `result/<ProjectName>_<TargetName>` (without the FITS extension in the Siril command).
 
 ## Project structure
 
 ```text
 sirilBatch.py                   # entry point started by Siril
-sirilpyBatch/
+sirilpybatch/
 ├── __init__.py                 # version, public API (BatchPlugin, BatchPluginRegistry, execute)
-├── sirilpyBatch.py             # plugin loader + application start-up
+├── sirilpybatch.py             # plugin loader + application start-up
 ├── cfg/
 │   └── sirilpyConfig.yaml      # telescopes and filter definitions
 ├── Core/
@@ -252,15 +257,15 @@ sirilpyBatch/
 - **The window never opens / "Failed to connect to Siril".** The tool must be started from a running Siril (via the Scripts menu), not from a plain terminal.
 - **A plugin is missing from the list.** Look at the console output for `Skipping plugin <file>: …`. That is a YAML or import error. Also check that the file doesn't start with `_`, that it uses `@BatchPluginRegistry.register(...)`, and that its `Key` is unique.
 - **The SPCC *Filter* drop-down is empty.** It is filled from the selected telescope. On a fresh install no telescope has been applied yet, so choose one in the **Telescope** drop-down (if the right one is already shown, pick another and switch back).
-- **"Global config not found".** `sirilpyBatch/cfg/sirilpyConfig.yaml` is missing. Make sure the whole `sirilpyBatch/` folder was copied.
+- **"Global config not found".** `sirilpybatch/cfg/sirilpyConfig.yaml` is missing. Make sure the whole `sirilpybatch/` folder was copied.
 - **Presets don't persist.** They are written next to `sirilBatch.py`, so that folder must be writable.
 
 ## Development
 
-Python ≥ 3.10 with `PyQt6` and `PyYAML`. `sirilpy` is only available inside Siril's environment, so the application can't be run standalone. The metadata in [`pyproject.toml`](pyproject.toml) is for tooling and packaging. The normal way to use the tool is the Siril installation described above. When bumping the version, update it in `pyproject.toml`, `sirilpyBatch/__init__.py` and `sirilpyBatch/Core/Version.py`.
+Python ≥ 3.10 with `PyQt6` and `PyYAML`. `sirilpy` is only available inside Siril's environment, so the application can't be run standalone. The metadata in [`pyproject.toml`](pyproject.toml) is for tooling and packaging. The normal way to use the tool is the Siril installation described above. When bumping the version, update it in `pyproject.toml`, `sirilpybatch/__init__.py` and `sirilpybatch/Core/Version.py`.
 
 ## License
 
-sirilpyBatch is free software, released under the GNU General Public License v3.0 or later (GPL-3.0-or-later). See LICENSE for the full text.
+sirilpybatch is free software, released under the GNU General Public License v3.0 or later (GPL-3.0-or-later). See LICENSE for the full text.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.

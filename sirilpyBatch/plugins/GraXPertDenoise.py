@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from sirilpy import LogColor  # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
 Plugin_Config = """
 Plugin:
     Key: graxpert_denoise
     Title: GraXpert Denoise
+    targetName: ["graxpert_denoise"]
 Box:
     Columns: 4
 Items:
@@ -30,12 +31,6 @@ Items:
 @BatchPluginRegistry.register(Plugin_Config)
 class GraXpertDenoisePlugin(BatchPlugin):
 
-    result_name = "denoise"
-
-    def save(self):
-        wd = self.get_siril_wd()
-        self.cmd("save",f"{wd}/process/{self.result_name}").run()
-
     def process(self):
         self.cmd("cd","./process").run()
         # Exchange the file, the GraXpert operates on the original file
@@ -52,7 +47,7 @@ class GraXpertDenoisePlugin(BatchPlugin):
         cmd.add_arg("-strength={}", self.get_value("strength"))
 
         cmd.run()
+        self.save(0)
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}").run()
+    def getResultFile(self):
+        return 0

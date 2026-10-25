@@ -1,5 +1,5 @@
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
+from sirilpybatch import BatchPlugin, BatchPluginRegistry 
 
 
 Plugin_Config = """

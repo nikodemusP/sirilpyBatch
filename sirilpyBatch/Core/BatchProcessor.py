@@ -3,6 +3,8 @@
 # Contact: nikodemus.p@gmx.at
 #
 from dataclasses import dataclass
+import os
+import shutil
 from typing import Any, Callable, Optional
 
 import sirilpy as s # type: ignore
@@ -19,13 +21,15 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QComboBox,
     QGroupBox,
     QScrollArea,
+    QMessageBox,
 )
 
-from sirilpyBatch import APP_NAME, VERSION
+from sirilpybatch import APP_NAME, VERSION
 
 from .PluginItem import PluginItem
 from .BatchConfig import BatchConfig
@@ -660,13 +664,33 @@ class Batch(QMainWindow):
         # --------------------------------------------------------------------
         info_box = QGroupBox()
         info_layout = QVBoxLayout(info_box)
+
+        info_header_layout = QHBoxLayout()
         info_label = QLabel("Information")
-        info_layout.addWidget(info_label)
+        info_header_layout.addWidget(info_label)
+        info_header_layout.addStretch()
+
+        cleanup_button = QPushButton("Cleanup")
+        cleanup_button.setToolTip("Delete and recreate the process directory")
+        cleanup_button.clicked.connect(self._cleanup_process_directory)
+        info_header_layout.addWidget(cleanup_button)
+
+        info_layout.addLayout(info_header_layout)
 
         workdir = self.siril.get_siril_wd()
         cwd_label = QLabel(f"Current Working Directory: {workdir}")
         cwd_label.setWordWrap(True)
         info_layout.addWidget(cwd_label)
+
+        project_name = self.config.project_name()
+        if not project_name and workdir:
+            project_name = os.path.basename(os.path.normpath(workdir))
+
+        self.project_name_edit = QLineEdit(project_name)
+        self.project_name_edit.setPlaceholderText("Project Name")
+        self.project_name_edit.textChanged.connect(self._on_project_name_changed)
+        info_layout.addWidget(QLabel("Project Name:"))
+        info_layout.addWidget(self.project_name_edit)
 
         self.telescope_combo = QComboBox(info_box)
 
@@ -749,6 +773,51 @@ class Batch(QMainWindow):
         # --------------------------------------------------------------------
 
         main_layout.addLayout(self._create_buttons_layout())
+
+    def _on_project_name_changed(self, name: str):
+        """Persist the current project name into the batch config."""
+        self.config.set_project_name(name)
+
+    def _cleanup_process_directory(self):
+        """Delete and recreate the Siril working directory's process folder."""
+        workdir = self.siril.get_siril_wd()
+        if not workdir:
+            self.siril.log("Cannot clean up: Siril working directory is empty", LogColor.RED)
+            QMessageBox.critical(self, "Cleanup failed", "Siril working directory is empty.")
+            return
+
+        workdir = os.path.abspath(workdir)
+        process_dir = os.path.join(workdir, "process")
+
+        answer = QMessageBox.question(
+            self,
+            "Cleanup",
+            f"Delete and recreate this directory?\n{process_dir}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            if os.path.islink(process_dir):
+                os.unlink(process_dir)
+            elif os.path.isdir(process_dir):
+                shutil.rmtree(process_dir)
+            elif os.path.exists(process_dir):
+                os.unlink(process_dir)
+
+            os.makedirs(process_dir)
+        except OSError as error:
+            self.siril.log(f"Cleanup failed for '{process_dir}': {error}", LogColor.RED)
+            QMessageBox.critical(
+                self,
+                "Cleanup failed",
+                f"Could not recreate the process directory:\n{error}",
+            )
+            return
+
+        self.siril.log(f"Process directory cleaned: {process_dir}", LogColor.GREEN)
 
     # ------------------------------------------------------------------
     # BATCH PRESETS (from Batches: section of origin_m2_presets.yaml)

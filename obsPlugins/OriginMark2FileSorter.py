@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from dataclasses import dataclass
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
+from sirilpybatch import BatchPlugin, BatchPluginRegistry 
 
 Plugin_Config = """
 Plugin:

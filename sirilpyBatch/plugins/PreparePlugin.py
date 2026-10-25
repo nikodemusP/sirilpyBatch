@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import (
+from sirilpybatch import (
         BatchPlugin, 
         BatchPluginRegistry, 
         BatchCmd,
@@ -39,6 +39,7 @@ Plugin_Config = """
 Plugin:
     Key: calibrate
     Title: Prepare
+    targetName: ["stacked"]
 Box:
     Columns: 6
 Items:
@@ -106,7 +107,7 @@ class FrameDirItem(PluginItem):
     dialog_title: str = "Select frame directory"
 
     # shared with the directory fields of PluginItem.py so both remember the same folder
-    _SETTINGS = ("sirilpyBatch", "sirilpyBatch")  # organisation, application
+    _SETTINGS = ("sirilpybatch", "sirilpybatch")  # organisation, application
     _LAST_KEY = "DirectoryItem/lastDirectory"
     REMEMBER_PARENT = True  # start the next dialog in the parent of the last choice
 
@@ -363,8 +364,6 @@ def _fits_header(path: str) -> dict:
 # Must come after the item registration above: the registry parses the YAML here.
 @BatchPluginRegistry.register(Plugin_Config)
 class CalibratePlugin(BatchPlugin):
-
-    result_name = "calibration"
 
     # ── Frame loading ──────────────────────────────────────
     # Two directory buttons: the lights button only fills the Lights table, the frame button
@@ -944,6 +943,8 @@ class CalibratePlugin(BatchPlugin):
         # ── 0) process directory inside the work dir ──────────────
         proc = os.path.join(self.get_siril_wd(), "process")
         os.makedirs(proc, exist_ok=True)
+        result_dir = os.path.join(self.get_siril_wd(), "result")
+        os.makedirs(result_dir, exist_ok=True)
 
         # ── 1) masters from the best matching bias / dark / flat ───
         masters = {}
@@ -976,8 +977,20 @@ class CalibratePlugin(BatchPlugin):
         # ── 4) register ─────────────────────────────
         self.cmd("register", "pp_light").run()
         # ── 5) stack the images ─────────────────────────────
-        self.cmd("stack", "r_pp_light", "rej", "3", "3", "-norm=addscale", "-output_norm", "-rgb_equal", f"-out={self.result_name}").run()
+        (
+            self.cmd(
+                "stack",
+                "r_pp_light",
+                "rej",
+                "3",
+                "3",
+                "-norm=addscale",
+                "-output_norm",
+                "-rgb_equal",
+            )
+            .add_arg("-out={}", self.getOutFile(0))
+            .run()
+        )
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}").run()
+    def getResultFile(self):
+        return 0

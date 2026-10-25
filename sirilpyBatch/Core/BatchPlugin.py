@@ -34,7 +34,7 @@ class BatchCmd:
         """
         if not values:
             return self
-
+        print(f"add_arg: template={template}, values={values}")
         # unwrap a single tuple/list argument into multiple values
         if len(values) == 1 and isinstance(values[0], (tuple, list)):
             values = tuple(values[0])
@@ -43,6 +43,7 @@ class BatchCmd:
             return self
 
         self.args.append(f'"{template.format(*values)}"')
+        print(f"add_arg: added argument={self.args[-1]}")
         return self
 
     def add_opt(self, option, condition):
@@ -81,12 +82,21 @@ class BatchPlugin:
         self.cmd_cb=None
         self.original_image: str | None = None
 
-    def set_up(self, key: str, title: str, items: list[PluginItem], columns: int = 5, plugin_config: dict | None = None):
+    def set_up(
+        self,
+        key: str,
+        title: str,
+        items: list[PluginItem],
+        columns: int = 5,
+        plugin_config: dict | None = None,
+        target_names: list[str] | None = None,
+    ):
         """Called once after construction to bind this instance to its registry entry."""
         self.plugin_items = items
         self.key_name = key
         self.title = title
         self.columns = columns
+        self.target_names = list(target_names or [])
         self.context.plugin_config = plugin_config if plugin_config is not None else {}
         self.context.siril.log(f"setup plugin: {self.title}", LogColor.GREEN)
 
@@ -100,7 +110,7 @@ class BatchPlugin:
         and wires those buttons to ``_on_process``/``_on_load``.
         """
         has_process = type(self).process is not BatchPlugin.process
-        has_load = type(self).load is not BatchPlugin.load
+        has_load = type(self).getResultFile is not BatchPlugin.getResultFile
 
         self._resolve_callbacks()
 
@@ -136,6 +146,17 @@ class BatchPlugin:
                     LogColor.RED,
                 )
 
+    def load(self):
+        idx = self.getResultFile()
+        fileName = self.getOutFile(idx)
+        self.context.siril.log(f"Loading result file: {fileName}", LogColor.GREEN)
+        cmd = self.cmd("load", fileName)
+        cmd.run()
+
+    def save(self, idx: int = 0):
+        fileName = self.getOutFile(idx)
+        self.cmd("save", fileName).run()
+
     def get_key_name(self):
         """Returns the internal registry key of the plugin."""
         return self.key_name
@@ -143,6 +164,28 @@ class BatchPlugin:
     def get_plugin_name(self):
         """Returns the display title of the plugin."""
         return self.title
+
+    def getOutFile(self, idx: int) -> str:
+        """Return the result path for the target name at ``idx``."""
+        if not isinstance(idx, int) or isinstance(idx, bool):
+            raise TypeError("target name index must be an integer")
+        if idx < 0 or idx >= len(self.target_names):
+            raise IndexError(
+                f"target name index {idx} out of range for {len(self.target_names)} target name(s)"
+            )
+
+        project_name = str(self.get_config("project_name", "") or "").strip()
+        if not project_name:
+            project_name = os.path.basename(os.path.normpath(self.get_siril_wd()))
+
+        filename = f"{project_name}_{self.target_names[idx]}"
+        return os.path.join(self.get_siril_wd(), "result", filename)
+
+    def getOutFileArg(self, idx: int) -> str:
+        """Return the indexed result path formatted as a quoted Siril command argument."""
+        path = self.getOutFile(idx).replace("\\", "/")
+        print(f"getOutFileArg: path={path}")
+        return f'"{path}"'
 
     def cmd(self, *args) -> BatchCmd:
         return BatchCmd(self.cmd_cb).append(*args)
@@ -199,7 +242,7 @@ class BatchPlugin:
         """Override to implement the plugin's main batch action. No-op by default."""
         pass
 
-    def load(self):
+    def getResultFile(self):
         """Override to implement a lightweight preview/load action. No-op by default."""
         pass
 

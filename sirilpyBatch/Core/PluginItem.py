@@ -207,7 +207,7 @@ class DirectoryItem(PluginItem):
     # folders (Lights / Darks / Flats / Bias next to each other). False: start in the
     # chosen folder itself.
     REMEMBER_PARENT = True
-    _SETTINGS = ("sirilpyBatch", "sirilpyBatch")  # organisation, application
+    _SETTINGS = ("sirilpybatch", "sirilpybatch")  # organisation, application
     _LAST_KEY = "DirectoryItem/lastDirectory"
 
     @classmethod
