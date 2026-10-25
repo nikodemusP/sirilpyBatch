@@ -991,6 +991,7 @@ class CalibratePlugin(BatchPlugin):
             .add_arg("-out={}", self.get_out_file(0))
             .run()
         )
+        self.load()
 
     def get_result_file(self):
         return 0
