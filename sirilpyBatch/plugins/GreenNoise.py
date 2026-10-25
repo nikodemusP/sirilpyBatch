@@ -2,7 +2,7 @@
 from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: green_noise
     Title: Green Noise
@@ -34,7 +34,7 @@ Items:
         Default: False
 """
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class GreenNoisePlugin(BatchPlugin):
 
     def process(self):
@@ -49,5 +49,5 @@ class GreenNoisePlugin(BatchPlugin):
         cmd.run()
         self.save()
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0

@@ -30,12 +30,12 @@ from sirilpybatch import (
         BatchCmd,
         PluginItem, 
         BatchContext,
-        registerItem,
-        scanDirectory
+        register_item,
+        scan_directory
     )
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: calibrate
     Title: Prepare
@@ -46,14 +46,14 @@ Items:
     - LightsDir:
         Key: lights_dirs
         colspan: 6
-        onChange: frame_dirs_changed
+        on_change: frame_dirs_changed
     - FrameTable:
         Key: lights_table
         colspan: 6
     - FrameDir:
         Key: frame_dirs
         colspan: 6
-        onChange: frame_dirs_changed
+        on_change: frame_dirs_changed
     - FrameTable:
         Key: bias_table
         colspan: 6
@@ -88,7 +88,7 @@ Items:
 """
 
 # ------------------------------------------------------------------------------------------
-@registerItem("framedir", "framedirs")
+@register_item("framedir", "framedirs")
 @dataclass
 class FrameDirItem(PluginItem):
     """
@@ -100,9 +100,9 @@ class FrameDirItem(PluginItem):
 
     The item value (saved in the plugin config) is ``{"dirs": [...], "removed": [...]}``:
     the added directories and the files the user deleted from the tables. The callback
-    (``onChange``) receives the same dict; after a click it also contains ``"rescan": [dir]``.
+    (``on_change``) receives the same dict; after a click it also contains ``"rescan": [dir]``.
     """
-    labelPos: str = "NONE"  # the button text is the caption, no label left of it
+    label_pos: str = "NONE"  # the button text is the caption, no label left of it
     button_text: str = "+ Frame-Dir"
     dialog_title: str = "Select frame directory"
 
@@ -189,7 +189,7 @@ class FrameDirItem(PluginItem):
             notify(self.parse_state(widget.state), self.key)
 
 
-@registerItem("lightsdir")
+@register_item("lightsdir")
 @dataclass
 class LightsDirItem(FrameDirItem):
     """The "+ Lights-Dir" button (YAML type ``LightsDir``): same behaviour, for the light frames."""
@@ -198,7 +198,7 @@ class LightsDirItem(FrameDirItem):
 
 
 # ------------------------------------------------------------------------------------------
-@registerItem("frametable")
+@register_item("frametable")
 @dataclass
 class FrameTableItem(PluginItem):
     """
@@ -213,7 +213,7 @@ class FrameTableItem(PluginItem):
     columns: list[str] = field(
         default_factory=lambda: ["File", "Pixel", "Stacks", "Exposure [s]", "ISO"]
     )
-    labelPos: str = "NONE"  # the table has its own title, no label left of it
+    label_pos: str = "NONE"  # the table has its own title, no label left of it
     title: str = ""  # default: derived from the key (lights_table -> Lights)
     max_rows: int = 6  # visible rows before the table starts to scroll
     save: bool = False  # display-only, never stored in the plugin config
@@ -362,7 +362,7 @@ def _fits_header(path: str) -> dict:
 
 
 # Must come after the item registration above: the registry parses the YAML here.
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class CalibratePlugin(BatchPlugin):
 
     # ── Frame loading ──────────────────────────────────────
@@ -478,7 +478,7 @@ class CalibratePlugin(BatchPlugin):
 
     # ── Directories ────────────────────────────────────────
     def frame_dirs_changed(self, value, key):
-        """onChange handler of "+ Lights-Dir" / "+ Frame-Dir" (also called when the config is restored)."""
+        """on_change handler of "+ Lights-Dir" / "+ Frame-Dir" (also called when the config is restored)."""
         self._init_state()
         group = self.GROUP_OF_KEY.get(key)
         if group is None:
@@ -591,7 +591,7 @@ class CalibratePlugin(BatchPlugin):
     def _scan_dir(self, directory, log=True):
         unreadable: list = []
         self._raw[directory] = list(
-            scanDirectory(self._resolve(directory), on_error=lambda file, exc: unreadable.append(file))
+            scan_directory(self._resolve(directory), on_error=lambda file, exc: unreadable.append(file))
         )
         if unreadable and log:
             self.context.siril.log(
@@ -988,9 +988,9 @@ class CalibratePlugin(BatchPlugin):
                 "-output_norm",
                 "-rgb_equal",
             )
-            .add_arg("-out={}", self.getOutFile(0))
+            .add_arg("-out={}", self.get_out_file(0))
             .run()
         )
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0

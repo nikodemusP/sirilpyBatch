@@ -3,7 +3,7 @@ from sirilpy import LogColor  # type: ignore
 from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: graxpert_denoise
     Title: GraXpert Denoise
@@ -28,7 +28,7 @@ Items:
         Step: 0.1
 """
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class GraXpertDenoisePlugin(BatchPlugin):
 
     def process(self):
@@ -49,5 +49,5 @@ class GraXpertDenoisePlugin(BatchPlugin):
         cmd.run()
         self.save(0)
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0

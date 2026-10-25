@@ -3,7 +3,7 @@ from sirilpy import LogColor  # type: ignore
 from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: graxpert_bge
     Title: GraXpert Background
@@ -34,7 +34,7 @@ Items:
         Default: subtraction
 """
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class GraXpertBackgroundPlugin(BatchPlugin):
 
     def process(self):
@@ -51,5 +51,5 @@ class GraXpertBackgroundPlugin(BatchPlugin):
 
         self.save(0)
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0

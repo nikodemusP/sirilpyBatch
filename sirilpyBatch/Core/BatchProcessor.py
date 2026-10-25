@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from sirilpybatch import APP_NAME, VERSION
+from .BatchCmd import set_batch_command_output
 
 from .PluginItem import PluginItem
 from .BatchConfig import BatchConfig
@@ -44,13 +45,13 @@ from .BatchPlugin import BatchPlugin
 class BatchPluginInstance:
     """
     A live plugin placed into the batch by the user, pairing its static
-    ``entry`` with the running ``instance``, the ``widget`` (its config box),
+    ``entry`` with the running ``plug_instance``, the ``widget`` (its config box),
     and the ``row`` container widget that holds both the box and its
     up/down/remove buttons inside ``PluginContainer``.
     """
 
     entry: BatchPluginEntry
-    instance: BatchPlugin
+    plug_instance: BatchPlugin
     widget: PluginBox
     row: Optional[QWidget] = None
 
@@ -244,7 +245,7 @@ class PluginContainer(QWidget):
 
         instance = BatchPluginInstance(
             entry=entry,
-            instance=plugin,
+            plug_instance=plugin,
             widget=widget,
             row=None,
         )
@@ -282,7 +283,9 @@ class PluginContainer(QWidget):
     # RUN THE PLUGINS
     # ==================================================================
     def run_plugins(self, cmd: Callable[..., None]):
+
         """Execute all configured plugins sequentially in their displayed order."""
+        set_batch_command_output(cmd)
         for instance in list(self.instances):
             self.siril.log(
                 f"Running plugin: {instance.entry.title}",
@@ -291,7 +294,7 @@ class PluginContainer(QWidget):
 
             try:
                 # Uses the same process/load behavior as the plugin's Process button.
-                instance.instance.execute(cmd)
+                instance.plug_instance.execute()
             except Exception as error:
                 self.siril.log(
                     f"Error running plugin {instance.entry.title}: {error}",
@@ -508,7 +511,7 @@ class PluginContainer(QWidget):
             instance.widget.deleteLater()
             
             # 3. Neues Widget mit aktualisiertem Context generieren
-            instance.widget = instance.instance.create_plugin_box()
+            instance.widget = instance.plug_instance.create_plugin_box()
             
             # 4. Vorherige Werte wiederherstellen (sofern sie noch in den neuen Listen existieren)
             instance.widget.set_config(current_config)
@@ -590,7 +593,7 @@ class PluginList(QListWidget):
             item.setToolTip(plugin.key)
             self.addItem(item)
 
-    def startDrag(self, supportedActions):
+    def startDrag(self, supported_actions):
         """Begin a drag carrying the selected plugin's registry key as plain text."""
 
         item = self.currentItem()
@@ -632,7 +635,7 @@ class Batch(QMainWindow):
         # Load the plugins
         self.siril.log(f"load plugins", LogColor.GREEN)
         
-        self.createWindow()
+        self.create_window()
 
         self.initialization_successful = True
 
@@ -647,7 +650,7 @@ class Batch(QMainWindow):
             print(f"Failed to connect to Siril: {error}")
             return None
 
-    def createWindow(self):
+    def create_window(self):
         """Build the main layout: info panel, plugin sidebar, drop-target batch area, footer."""
         self.setWindowTitle(f"{APP_NAME} - v{VERSION}")
         self.resize(1400, 900)
@@ -910,7 +913,7 @@ class Batch(QMainWindow):
         is_new = name not in batches
         batches[name] = entries
 
-        self.config.storePresets({"Batches": batches})
+        self.config.store_presets({"Batches": batches})
 
         if is_new:
             self.batch_combo.addItem(name)

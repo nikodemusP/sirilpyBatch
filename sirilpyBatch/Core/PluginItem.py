@@ -43,7 +43,7 @@ class PluginItem:
     """
     key: str  = None # internal key used to read/write this item's value
     label: str = None  # label for the widget
-    labelPos: str = "LEFT"  # LEFT | RIGHT | NONE (NONE/HIDDEN: no label, the widget fills the cell)
+    label_pos: str = "LEFT"  # LEFT | RIGHT | NONE (NONE/HIDDEN: no label, the widget fills the cell)
     default: Any = None
     tooltip: str = ""
     value: Any = None
@@ -51,9 +51,9 @@ class PluginItem:
     # wide text field); clamped to the box's total column count and will
     # wrap to a new row if it doesn't fit in the remaining space.
     callback: Optional[Callable[[Any, str], None]] = None  # called as callback(value, key)
-    # whenever this item's value changes (in addition to PluginBox.valueChanged)
+    # whenever this item's value changes (in addition to PluginBox.value_changed)
     save: bool = True  # False: value is neither written to nor restored from the plugin config
-    onChange: Optional[str] = None  # name of a method on the owning plugin (e.g. from YAML);
+    on_change: Optional[str] = None  # name of a method on the owning plugin (e.g. from YAML);
     # BatchPlugin.create_plugin_box resolves it and stores the bound method in ``callback``.
 
 
@@ -87,7 +87,7 @@ class SeparatorItem(PluginItem):
 
 @dataclass
 class CheckboxItem(PluginItem):
-    labelPos: str = "RIGHT"
+    label_pos: str = "RIGHT"
 
     def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
         widget = QCheckBox()
@@ -405,7 +405,7 @@ ITEM_TYPES: dict[str, Type[PluginItem]] = {
 }
 
 
-def registerItem(*names: str):
+def register_item(*names: str):
     """
     Class decorator that makes a ``PluginItem`` subclass usable from a plugin's YAML.
 

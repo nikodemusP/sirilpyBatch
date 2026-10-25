@@ -83,7 +83,7 @@ def frame_type(header: dict) -> Optional[str]:
     return None
 
 
-def scanDirectory(
+def scan_directory(
     path: str,
     extensions: tuple = FITS_EXTENSIONS,
     on_error: Optional[Callable[[str, Exception], None]] = None,

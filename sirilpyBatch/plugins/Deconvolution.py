@@ -4,7 +4,7 @@ import os
 from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: deconvolution
     Title: Deconvolution
@@ -26,7 +26,7 @@ Items:
 """
 
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class DeconvolutionPlugin(BatchPlugin):
 
     psf_path = "process/psf.fits"
@@ -50,5 +50,5 @@ class DeconvolutionPlugin(BatchPlugin):
         cmd.run()
         self.save(0)
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0

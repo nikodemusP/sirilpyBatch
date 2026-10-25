@@ -131,7 +131,7 @@ Global and preset files are merged **per top-level key**, with the preset file w
 from sirilpy import LogColor  # type: ignore
 from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: my_plugin          # unique id, also used in saved presets
     Title: My Plugin        # shown in the UI
@@ -149,7 +149,7 @@ Items:
         Default: 3,3
 """
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class MyPlugin(BatchPlugin):
 
     result_name = "my_result"
@@ -217,8 +217,9 @@ Defaults when omitted: `Min` 0, `Max` 100, `Step` 1, `Decimals` 2.
 | `self.get_siril_wd()` | Siril's current working directory |
 | `self.get_value("key")` | Current value of one of the plugin's settings |
 | `self.get_config("a.b", default)` | Value from the merged global/preset config, e.g. `telescope.sensor` |
-| `self.getOutFile(idx)` | Absolute output path for the `TargetName` at the given zero-based index |
-| `self.getOutFileArg(idx)` | The same output path formatted as a quoted Siril command argument |
+| `self.get_out_file(idx)` | Absolute output path for the `TargetName` at the given zero-based index |
+| `self.get_out_file_arg(idx)` | The same output path formatted as a quoted Siril command argument |
+| `self.get_result_file()` | Override to select which target output the base `load()` method loads |
 | `self.key_name`, `self.title` | The plugin's key and title |
 | `self.target_names` | Output base names declared by `Plugin: TargetName` |
 

@@ -5,7 +5,7 @@
 from sirilpy import LogColor # type: ignore
 from sirilpybatch import BatchPlugin, BatchPluginRegistry 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: color_calibration
     Title: Color Calibration
@@ -51,7 +51,7 @@ Items:
 """
 
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class CalibratePlugin(BatchPlugin):
 
     result_name = "calibration"
@@ -82,16 +82,16 @@ class CalibratePlugin(BatchPlugin):
 
 
     def spcc(self):
-        filterCfg = self.get_config(f"filterCfg.{filter}",'-oscfilter=No filter')
+        filter_cfg = self.get_config(f"filterCfg.{filter}",'-oscfilter=No filter')
         (
             self.cmd("spcc")
             .add_arg("-oscsensor={}",self.get_config("telescope.sensor",""))
-            .add_arg("{}",filterCfg)
+            .add_arg("{}",filter_cfg)
             .add_arg("-bgtol={},{}",self.get_value("spcc_bgtol"))
             .run()
         )
         self.save(1)
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0 if self.get_value("pcc") else 1
         

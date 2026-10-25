@@ -4,7 +4,7 @@ import os
 from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: crop
     Title: Crop
@@ -15,7 +15,7 @@ Items: []
 """
 
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class CropPlugin(BatchPlugin):
 
     def process(self):
@@ -48,7 +48,7 @@ class CropPlugin(BatchPlugin):
             str(width),
             str(height),
         ).run()
-        self.cmd("save", self.getOutFile(0)).run()
+        self.cmd("save", self.get_out_file(0)).run()
 
-    def getResultFile(self):
+    def get_result_file(self):
         return 0
