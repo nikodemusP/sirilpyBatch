@@ -1,5 +1,5 @@
 # 1. Package Metadata
-__version__ = "0.1.3rc2"
+__version__ = "0.1.4"
 __app_name__ = "sirilpybatch"
 
 # Standard capitals for global constants within your code
