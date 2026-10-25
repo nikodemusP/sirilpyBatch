@@ -1,8 +1,8 @@
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry 
+from sirilpybatch import BatchPlugin, BatchPluginRegistry 
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: template
     Title: Template Plugin
@@ -28,7 +28,7 @@ Items:
         Default: 3,3
 """
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class CalibratePlugin(BatchPlugin):
 
     result_name = "template"

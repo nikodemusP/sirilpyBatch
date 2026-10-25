@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sirilpybatch"
-# Keep in sync with sirilpyBatch/__init__.py and sirilpyBatch/Core/Version.py
-version = "0.1.1"
+# Keep in sync with sirilpybatch/__init__.py and sirilpybatch/Core/Version.py
+version = "0.1.2"
 description = "Drag-and-drop batch processing for Siril, extendable through small plugins."
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -49,10 +49,10 @@ py-modules = ["sirilBatch"]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["sirilpyBatch*"]
+include = ["sirilpybatch*"]
 namespaces = true
 
 [tool.setuptools.package-data]
 # `plugins/` and `cfg/` are not regular Python packages, so use namespace-package
 # discovery and include the YAML files shipped with the app.
-"sirilpyBatch.cfg" = ["*.yaml"]
+"sirilpybatch.cfg" = ["*.yaml"]

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Type
 
 from .BatchConfig import BatchConfig
@@ -35,6 +35,7 @@ class BatchPluginEntry:
     items: list[PluginItem]
     columns: int = 5
     enabled: bool = True
+    target_names: list[str] = field(default_factory=list)
 
     def instantiate(
         self,
@@ -50,5 +51,6 @@ class BatchPluginEntry:
             items=self.items,
             columns=self.columns,
             plugin_config=plugin_config,
+            target_names=self.target_names,
         )
         return instance

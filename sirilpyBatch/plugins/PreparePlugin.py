@@ -24,35 +24,36 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from sirilpy import LogColor # type: ignore
-from sirilpyBatch import (
+from sirilpybatch import (
         BatchPlugin, 
         BatchPluginRegistry, 
         BatchCmd,
         PluginItem, 
         BatchContext,
-        registerItem,
-        scanDirectory
+        register_item,
+        scan_directory
     )
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: calibrate
     Title: Prepare
+    targetName: ["stacked"]
 Box:
     Columns: 6
 Items:
     - LightsDir:
         Key: lights_dirs
         colspan: 6
-        onChange: frame_dirs_changed
+        on_change: frame_dirs_changed
     - FrameTable:
         Key: lights_table
         colspan: 6
     - FrameDir:
         Key: frame_dirs
         colspan: 6
-        onChange: frame_dirs_changed
+        on_change: frame_dirs_changed
     - FrameTable:
         Key: bias_table
         colspan: 6
@@ -87,7 +88,7 @@ Items:
 """
 
 # ------------------------------------------------------------------------------------------
-@registerItem("framedir", "framedirs")
+@register_item("framedir", "framedirs")
 @dataclass
 class FrameDirItem(PluginItem):
     """
@@ -99,14 +100,14 @@ class FrameDirItem(PluginItem):
 
     The item value (saved in the plugin config) is ``{"dirs": [...], "removed": [...]}``:
     the added directories and the files the user deleted from the tables. The callback
-    (``onChange``) receives the same dict; after a click it also contains ``"rescan": [dir]``.
+    (``on_change``) receives the same dict; after a click it also contains ``"rescan": [dir]``.
     """
-    labelPos: str = "NONE"  # the button text is the caption, no label left of it
+    label_pos: str = "NONE"  # the button text is the caption, no label left of it
     button_text: str = "+ Frame-Dir"
     dialog_title: str = "Select frame directory"
 
     # shared with the directory fields of PluginItem.py so both remember the same folder
-    _SETTINGS = ("sirilpyBatch", "sirilpyBatch")  # organisation, application
+    _SETTINGS = ("sirilpybatch", "sirilpybatch")  # organisation, application
     _LAST_KEY = "DirectoryItem/lastDirectory"
     REMEMBER_PARENT = True  # start the next dialog in the parent of the last choice
 
@@ -188,7 +189,7 @@ class FrameDirItem(PluginItem):
             notify(self.parse_state(widget.state), self.key)
 
 
-@registerItem("lightsdir")
+@register_item("lightsdir")
 @dataclass
 class LightsDirItem(FrameDirItem):
     """The "+ Lights-Dir" button (YAML type ``LightsDir``): same behaviour, for the light frames."""
@@ -197,7 +198,7 @@ class LightsDirItem(FrameDirItem):
 
 
 # ------------------------------------------------------------------------------------------
-@registerItem("frametable")
+@register_item("frametable")
 @dataclass
 class FrameTableItem(PluginItem):
     """
@@ -212,7 +213,7 @@ class FrameTableItem(PluginItem):
     columns: list[str] = field(
         default_factory=lambda: ["File", "Pixel", "Stacks", "Exposure [s]", "ISO"]
     )
-    labelPos: str = "NONE"  # the table has its own title, no label left of it
+    label_pos: str = "NONE"  # the table has its own title, no label left of it
     title: str = ""  # default: derived from the key (lights_table -> Lights)
     max_rows: int = 6  # visible rows before the table starts to scroll
     save: bool = False  # display-only, never stored in the plugin config
@@ -361,10 +362,8 @@ def _fits_header(path: str) -> dict:
 
 
 # Must come after the item registration above: the registry parses the YAML here.
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class CalibratePlugin(BatchPlugin):
-
-    result_name = "calibration"
 
     # ── Frame loading ──────────────────────────────────────
     # Two directory buttons: the lights button only fills the Lights table, the frame button
@@ -479,7 +478,7 @@ class CalibratePlugin(BatchPlugin):
 
     # ── Directories ────────────────────────────────────────
     def frame_dirs_changed(self, value, key):
-        """onChange handler of "+ Lights-Dir" / "+ Frame-Dir" (also called when the config is restored)."""
+        """on_change handler of "+ Lights-Dir" / "+ Frame-Dir" (also called when the config is restored)."""
         self._init_state()
         group = self.GROUP_OF_KEY.get(key)
         if group is None:
@@ -592,7 +591,7 @@ class CalibratePlugin(BatchPlugin):
     def _scan_dir(self, directory, log=True):
         unreadable: list = []
         self._raw[directory] = list(
-            scanDirectory(self._resolve(directory), on_error=lambda file, exc: unreadable.append(file))
+            scan_directory(self._resolve(directory), on_error=lambda file, exc: unreadable.append(file))
         )
         if unreadable and log:
             self.context.siril.log(
@@ -944,6 +943,8 @@ class CalibratePlugin(BatchPlugin):
         # ── 0) process directory inside the work dir ──────────────
         proc = os.path.join(self.get_siril_wd(), "process")
         os.makedirs(proc, exist_ok=True)
+        result_dir = os.path.join(self.get_siril_wd(), "result")
+        os.makedirs(result_dir, exist_ok=True)
 
         # ── 1) masters from the best matching bias / dark / flat ───
         masters = {}
@@ -976,8 +977,20 @@ class CalibratePlugin(BatchPlugin):
         # ── 4) register ─────────────────────────────
         self.cmd("register", "pp_light").run()
         # ── 5) stack the images ─────────────────────────────
-        self.cmd("stack", "r_pp_light", "rej", "3", "3", "-norm=addscale", "-output_norm", "-rgb_equal", f"-out={self.result_name}").run()
+        (
+            self.cmd(
+                "stack",
+                "r_pp_light",
+                "rej",
+                "3",
+                "3",
+                "-norm=addscale",
+                "-output_norm",
+                "-rgb_equal",
+            )
+            .add_arg("-out={}", self.get_out_file(0))
+            .run()
+        )
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}").run()
+    def get_result_file(self):
+        return 0

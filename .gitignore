@@ -1,2 +1,3 @@
-.vscode/settings.json
-./sirilpyBatch.yaml
+.vscode/**
+./sirilpybatch.yaml
+__pycache__

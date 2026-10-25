@@ -8,53 +8,13 @@ from typing import Any, Callable
 from sirilpy import LogColor # type: ignore
 from PyQt6.QtWidgets import QMessageBox
 
+from .BatchCmd import BatchCmd, set_batch_command_output
 from .PluginBox import PluginBox
 from .PluginItem import PluginItem
 from .BatchContext import BatchContext 
 from .BatchConfig import BatchConfig 
 
-class BatchCmd:
-    def __init__(self, cmd: Callable[..., None]):
-        self.cmd = cmd
-        self.args = []
 
-    def append(self, *args):
-        if args:
-            self.args.extend(args)
-        return self
-
-    def add_arg(self, template, *values):
-        """
-        Format `template` with one or more values and append it as one arg.
-
-        Supports:
-        add_arg("-bias={}", value)              # single value
-        add_arg("-catalog={},{}", low, high)     # multiple positional values
-        add_arg("-catalog={},{}", (low, high))   # single tuple/list, unpacked
-        """
-        if not values:
-            return self
-
-        # unwrap a single tuple/list argument into multiple values
-        if len(values) == 1 and isinstance(values[0], (tuple, list)):
-            values = tuple(values[0])
-
-        if any(v is None for v in values):
-            return self
-
-        self.args.append(f'"{template.format(*values)}"')
-        return self
-
-    def add_opt(self, option, condition):
-        if condition:
-            self.args.append(option)
-        return self
-
-    def run(self):
-        return self.cmd(*self.args)
-
-    def __iter__(self):
-        return iter(self.args)
 
     
 class BatchPlugin:
@@ -78,15 +38,23 @@ class BatchPlugin:
             work_dir=siril.get_siril_wd(),
             plugin_config={},
         )
-        self.cmd_cb=None
         self.original_image: str | None = None
 
-    def set_up(self, key: str, title: str, items: list[PluginItem], columns: int = 5, plugin_config: dict | None = None):
+    def set_up(
+        self,
+        key: str,
+        title: str,
+        items: list[PluginItem],
+        columns: int = 5,
+        plugin_config: dict | None = None,
+        target_names: list[str] | None = None,
+    ):
         """Called once after construction to bind this instance to its registry entry."""
         self.plugin_items = items
         self.key_name = key
         self.title = title
         self.columns = columns
+        self.target_names = list(target_names or [])
         self.context.plugin_config = plugin_config if plugin_config is not None else {}
         self.context.siril.log(f"setup plugin: {self.title}", LogColor.GREEN)
 
@@ -100,7 +68,7 @@ class BatchPlugin:
         and wires those buttons to ``_on_process``/``_on_load``.
         """
         has_process = type(self).process is not BatchPlugin.process
-        has_load = type(self).load is not BatchPlugin.load
+        has_load = type(self).get_result_file is not BatchPlugin.get_result_file
 
         self._resolve_callbacks()
 
@@ -114,16 +82,16 @@ class BatchPlugin:
         )
 
         if has_process:
-            self.box.processRequested.connect(self._on_process)
+            self.box.process_requested.connect(self._on_process)
         if has_load:
-            self.box.loadRequested.connect(self._on_load)
+            self.box.load_requested.connect(self._on_load)
 
         return self.box
 
     def _resolve_callbacks(self):
-        """Turn ``onChange: method_name`` of each item into a bound method of this plugin."""
+        """Bind each item's ``on_change`` callback to a method on this plugin."""
         for item in self.plugin_items:
-            name = getattr(item, "onChange", None)
+            name = getattr(item, "on_change", None)
             if not name or item.callback is not None:
                 continue
             method = getattr(self, str(name), None)
@@ -131,10 +99,21 @@ class BatchPlugin:
                 item.callback = method  # called as method(value, key)
             else:
                 self.context.siril.log(
-                    f"{self.title}: onChange '{name}' for '{item.key}' is not a method of "
+                    f"{self.title}: on_change '{name}' for '{item.key}' is not a method of "
                     f"{type(self).__name__}",
                     LogColor.RED,
                 )
+
+    def load(self):
+        idx = self.get_result_file()
+        file_name = self.get_out_file(idx)
+        self.context.siril.log(f"Loading result file: {file_name}", LogColor.GREEN)
+        cmd = self.cmd("load", file_name)
+        cmd.run()
+
+    def save(self, idx: int = 0):
+        file_name = self.get_out_file(idx)
+        self.cmd("save", file_name).run()
 
     def get_key_name(self):
         """Returns the internal registry key of the plugin."""
@@ -144,8 +123,29 @@ class BatchPlugin:
         """Returns the display title of the plugin."""
         return self.title
 
+    def get_out_file(self, idx: int) -> str:
+        """Return the result path for the target name at ``idx``."""
+        if not isinstance(idx, int) or isinstance(idx, bool):
+            raise TypeError("target name index must be an integer")
+        if idx < 0 or idx >= len(self.target_names):
+            raise IndexError(
+                f"target name index {idx} out of range for {len(self.target_names)} target name(s)"
+            )
+
+        project_name = str(self.get_config("project_name", "") or "").strip()
+        if not project_name:
+            project_name = os.path.basename(os.path.normpath(self.get_siril_wd()))
+
+        filename = f"{project_name}_{self.target_names[idx]}"
+        return os.path.join(self.get_siril_wd(), "result", filename)
+
+    def get_out_file_arg(self, idx: int) -> str:
+        """Return the indexed result path formatted as a quoted Siril command argument."""
+        path = self.get_out_file(idx).replace("\\", "/")
+        return f'"{path}"'
+
     def cmd(self, *args) -> BatchCmd:
-        return BatchCmd(self.cmd_cb).append(*args)
+        return BatchCmd().append(*args)
 
     def confirm(self, title: str, message: str) -> bool:
         """Show a reusable OK/Cancel confirmation dialog for plugin actions."""
@@ -164,13 +164,12 @@ class BatchPlugin:
             raise RuntimeError("No original image was captured for this process")
         self.cmd("load", self.original_image).run()
 
-    def execute(self, cmd_cb: Callable[..., None]):
+    def execute(self):
         """
         Handler for the "Process" button: runs ``process()``, always returns
         to the original working directory afterwards, then runs ``load()``
         (if defined) so the result is immediately reflected in the UI.
         """
-        self.cmd_cb = cmd_cb
         self.cmd("cd", self.context.work_dir).run()
         has_load = type(self).load is not BatchPlugin.load
         try:
@@ -189,7 +188,8 @@ class BatchPlugin:
         self.cmd("cd", self.context.work_dir).run()
     
     def _on_process(self):
-        self.execute(lambda *args: self.context.siril.cmd(*args))
+        set_batch_command_output(self.context.siril.cmd)
+        self.execute()
 
     def _on_load(self):
         """Handler for the "Load" button."""
@@ -199,7 +199,7 @@ class BatchPlugin:
         """Override to implement the plugin's main batch action. No-op by default."""
         pass
 
-    def load(self):
+    def get_result_file(self):
         """Override to implement a lightweight preview/load action. No-op by default."""
         pass
 

@@ -1,4 +1,4 @@
-# sirilpyBatch - drag-and-drop batch processing for Siril
+# sirilpybatch - drag-and-drop batch processing for Siril
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
@@ -17,7 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-sirilpyBatch - a Siril PyQt6 batch-processing front end.
+sirilpybatch - a Siril PyQt6 batch-processing front end.
 
 Lets the user drag-and-drop plugins from a sidebar list into an ordered
 batch, configure each one through its own widget box, reorder/remove them,

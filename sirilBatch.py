@@ -10,7 +10,7 @@ import sirilpy as s # type: ignore
 # pulls in PyQt6 and PyYAML immediately.
 s.ensure_installed("PyQt6", "numpy", "astropy", "pyyaml","sirilpybatch")
 
-import sirilpyBatch as batch
+import sirilpybatch as batch
 
 if __name__ == "__main__":
     batch.execute(sys.argv)

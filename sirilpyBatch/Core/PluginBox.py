@@ -73,9 +73,9 @@ class PluginBox(QGroupBox):
     grid of labeled widgets, plus an optional "Load" and/or "Process" button.
     """
 
-    valueChanged = pyqtSignal(str, object)
-    loadRequested = pyqtSignal()
-    processRequested = pyqtSignal()
+    value_changed = pyqtSignal(str, object)
+    load_requested = pyqtSignal()
+    process_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -132,9 +132,9 @@ class PluginBox(QGroupBox):
                 column = 0
                 row += 1
 
-            # labelPos NONE / HIDDEN (or an item without label text): no label at all, the
+            # label_pos NONE / HIDDEN (or an item without label text): no label at all, the
             # widget uses the whole cell (e.g. buttons and tables that bring their own caption)
-            label_position = (item.labelPos or "LEFT").upper()
+            label_position = (item.label_pos or "LEFT").upper()
             show_label = label_position not in ("NONE", "HIDDEN") and bool(item.label)
 
             label = ElidedLabel(item.label, auto_tooltip=not item.tooltip) if show_label else None
@@ -194,23 +194,23 @@ class PluginBox(QGroupBox):
             load_button = QPushButton("Load")
             load_button.setMinimumWidth(60)
             load_button.setMinimumHeight(30)
-            load_button.clicked.connect(self.loadRequested.emit)
+            load_button.clicked.connect(self.load_requested.emit)
             buttons.addWidget(load_button)
 
         if has_process:
             process_button = QPushButton("Process")
             process_button.setMinimumWidth(60)
             process_button.setMinimumHeight(30)
-            process_button.clicked.connect(self.processRequested.emit)
+            process_button.clicked.connect(self.process_requested.emit)
             buttons.addWidget(process_button)
 
         if has_load or has_process:
             main_layout.addLayout(buttons)
 
     def _make_change_handler(self, item: PluginItem):
-        """Emit valueChanged and, if the item defines one, call its own callback."""
+        """Emit value_changed and, if the item defines one, call its own callback."""
         def handler(value, key):
-            self.valueChanged.emit(key, value)
+            self.value_changed.emit(key, value)
             if item.callback is not None:
                 item.callback(value, key)
         return handler

@@ -3,6 +3,8 @@
 # Contact: nikodemus.p@gmx.at
 #
 from dataclasses import dataclass
+import os
+import shutil
 from typing import Any, Callable, Optional
 
 import sirilpy as s # type: ignore
@@ -19,13 +21,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QComboBox,
     QGroupBox,
     QScrollArea,
+    QMessageBox,
 )
 
-from sirilpyBatch import APP_NAME, VERSION
+from sirilpybatch import APP_NAME, VERSION
+from .BatchCmd import set_batch_command_output
 
 from .PluginItem import PluginItem
 from .BatchConfig import BatchConfig
@@ -40,13 +45,13 @@ from .BatchPlugin import BatchPlugin
 class BatchPluginInstance:
     """
     A live plugin placed into the batch by the user, pairing its static
-    ``entry`` with the running ``instance``, the ``widget`` (its config box),
+    ``entry`` with the running ``plug_instance``, the ``widget`` (its config box),
     and the ``row`` container widget that holds both the box and its
     up/down/remove buttons inside ``PluginContainer``.
     """
 
     entry: BatchPluginEntry
-    instance: BatchPlugin
+    plug_instance: BatchPlugin
     widget: PluginBox
     row: Optional[QWidget] = None
 
@@ -240,7 +245,7 @@ class PluginContainer(QWidget):
 
         instance = BatchPluginInstance(
             entry=entry,
-            instance=plugin,
+            plug_instance=plugin,
             widget=widget,
             row=None,
         )
@@ -278,7 +283,9 @@ class PluginContainer(QWidget):
     # RUN THE PLUGINS
     # ==================================================================
     def run_plugins(self, cmd: Callable[..., None]):
+
         """Execute all configured plugins sequentially in their displayed order."""
+        set_batch_command_output(cmd)
         for instance in list(self.instances):
             self.siril.log(
                 f"Running plugin: {instance.entry.title}",
@@ -287,7 +294,7 @@ class PluginContainer(QWidget):
 
             try:
                 # Uses the same process/load behavior as the plugin's Process button.
-                instance.instance.execute(cmd)
+                instance.plug_instance.execute()
             except Exception as error:
                 self.siril.log(
                     f"Error running plugin {instance.entry.title}: {error}",
@@ -504,7 +511,7 @@ class PluginContainer(QWidget):
             instance.widget.deleteLater()
             
             # 3. Neues Widget mit aktualisiertem Context generieren
-            instance.widget = instance.instance.create_plugin_box()
+            instance.widget = instance.plug_instance.create_plugin_box()
             
             # 4. Vorherige Werte wiederherstellen (sofern sie noch in den neuen Listen existieren)
             instance.widget.set_config(current_config)
@@ -586,7 +593,7 @@ class PluginList(QListWidget):
             item.setToolTip(plugin.key)
             self.addItem(item)
 
-    def startDrag(self, supportedActions):
+    def startDrag(self, supported_actions):
         """Begin a drag carrying the selected plugin's registry key as plain text."""
 
         item = self.currentItem()
@@ -628,7 +635,7 @@ class Batch(QMainWindow):
         # Load the plugins
         self.siril.log(f"load plugins", LogColor.GREEN)
         
-        self.createWindow()
+        self.create_window()
 
         self.initialization_successful = True
 
@@ -643,7 +650,7 @@ class Batch(QMainWindow):
             print(f"Failed to connect to Siril: {error}")
             return None
 
-    def createWindow(self):
+    def create_window(self):
         """Build the main layout: info panel, plugin sidebar, drop-target batch area, footer."""
         self.setWindowTitle(f"{APP_NAME} - v{VERSION}")
         self.resize(1400, 900)
@@ -660,13 +667,33 @@ class Batch(QMainWindow):
         # --------------------------------------------------------------------
         info_box = QGroupBox()
         info_layout = QVBoxLayout(info_box)
+
+        info_header_layout = QHBoxLayout()
         info_label = QLabel("Information")
-        info_layout.addWidget(info_label)
+        info_header_layout.addWidget(info_label)
+        info_header_layout.addStretch()
+
+        cleanup_button = QPushButton("Cleanup")
+        cleanup_button.setToolTip("Delete and recreate the process directory")
+        cleanup_button.clicked.connect(self._cleanup_process_directory)
+        info_header_layout.addWidget(cleanup_button)
+
+        info_layout.addLayout(info_header_layout)
 
         workdir = self.siril.get_siril_wd()
         cwd_label = QLabel(f"Current Working Directory: {workdir}")
         cwd_label.setWordWrap(True)
         info_layout.addWidget(cwd_label)
+
+        project_name = self.config.project_name()
+        if not project_name and workdir:
+            project_name = os.path.basename(os.path.normpath(workdir))
+
+        self.project_name_edit = QLineEdit(project_name)
+        self.project_name_edit.setPlaceholderText("Project Name")
+        self.project_name_edit.textChanged.connect(self._on_project_name_changed)
+        info_layout.addWidget(QLabel("Project Name:"))
+        info_layout.addWidget(self.project_name_edit)
 
         self.telescope_combo = QComboBox(info_box)
 
@@ -749,6 +776,51 @@ class Batch(QMainWindow):
         # --------------------------------------------------------------------
 
         main_layout.addLayout(self._create_buttons_layout())
+
+    def _on_project_name_changed(self, name: str):
+        """Persist the current project name into the batch config."""
+        self.config.set_project_name(name)
+
+    def _cleanup_process_directory(self):
+        """Delete and recreate the Siril working directory's process folder."""
+        workdir = self.siril.get_siril_wd()
+        if not workdir:
+            self.siril.log("Cannot clean up: Siril working directory is empty", LogColor.RED)
+            QMessageBox.critical(self, "Cleanup failed", "Siril working directory is empty.")
+            return
+
+        workdir = os.path.abspath(workdir)
+        process_dir = os.path.join(workdir, "process")
+
+        answer = QMessageBox.question(
+            self,
+            "Cleanup",
+            f"Delete and recreate this directory?\n{process_dir}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            if os.path.islink(process_dir):
+                os.unlink(process_dir)
+            elif os.path.isdir(process_dir):
+                shutil.rmtree(process_dir)
+            elif os.path.exists(process_dir):
+                os.unlink(process_dir)
+
+            os.makedirs(process_dir)
+        except OSError as error:
+            self.siril.log(f"Cleanup failed for '{process_dir}': {error}", LogColor.RED)
+            QMessageBox.critical(
+                self,
+                "Cleanup failed",
+                f"Could not recreate the process directory:\n{error}",
+            )
+            return
+
+        self.siril.log(f"Process directory cleaned: {process_dir}", LogColor.GREEN)
 
     # ------------------------------------------------------------------
     # BATCH PRESETS (from Batches: section of origin_m2_presets.yaml)
@@ -841,7 +913,7 @@ class Batch(QMainWindow):
         is_new = name not in batches
         batches[name] = entries
 
-        self.config.storePresets({"Batches": batches})
+        self.config.store_presets({"Batches": batches})
 
         if is_new:
             self.batch_combo.addItem(name)

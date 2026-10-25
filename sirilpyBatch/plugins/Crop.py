@@ -1,23 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: crop
     Title: Crop
+    targetName: ["crop"]
 Box:
     Columns: 1
 Items: []
 """
 
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class CropPlugin(BatchPlugin):
-
-    result_name = "crop"
 
     def process(self):
         if not self.original_image:
@@ -49,8 +48,7 @@ class CropPlugin(BatchPlugin):
             str(width),
             str(height),
         ).run()
-        self.cmd("save", self.result_name).run()
+        self.cmd("save", self.get_out_file(0)).run()
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}").run()
+    def get_result_file(self):
+        return 0

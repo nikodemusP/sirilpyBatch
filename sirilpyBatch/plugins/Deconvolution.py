@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: deconvolution
     Title: Deconvolution
+    targetName: ["decon"]
 Box:
     Columns: 4
 Items:
@@ -25,10 +26,9 @@ Items:
 """
 
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class DeconvolutionPlugin(BatchPlugin):
 
-    result_name = "deconvolution"
     psf_path = "process/psf.fits"
 
     def process(self):
@@ -48,8 +48,7 @@ class DeconvolutionPlugin(BatchPlugin):
         if command in ("rl", "sb"):
             cmd.add_arg("-iters={}", self.get_value("iters"))
         cmd.run()
-        self.cmd("save", f"process/{self.result_name}").run()
+        self.save(0)
 
-    def load(self):
-        wd = self.get_siril_wd()
-        self.cmd("load", f"{wd}/process/{self.result_name}").run()
+    def get_result_file(self):
+        return 0

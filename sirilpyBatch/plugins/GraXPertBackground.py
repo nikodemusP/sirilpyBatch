@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from sirilpy import LogColor  # type: ignore
-from sirilpyBatch import BatchPlugin, BatchPluginRegistry
+from sirilpybatch import BatchPlugin, BatchPluginRegistry
 
 
-Plugin_Config = """
+PLUGIN_CONFIG = """
 Plugin:
     Key: graxpert_bge
     Title: GraXpert Background
+    targetName: ["graxpert_bge"]
+
 Box:
     Columns: 4
 Items:
@@ -32,7 +34,7 @@ Items:
         Default: subtraction
 """
 
-@BatchPluginRegistry.register(Plugin_Config)
+@BatchPluginRegistry.register(PLUGIN_CONFIG)
 class GraXpertBackgroundPlugin(BatchPlugin):
 
     def process(self):
@@ -45,5 +47,9 @@ class GraXpertBackgroundPlugin(BatchPlugin):
         cmd.add_opt("-nogpu", not self.get_value("gpu"))
         cmd.add_arg("-smoothing={}", self.get_value("smoothing"))
         cmd.add_arg("-correction={}", self.get_value("correction"))
-
         cmd.run()
+
+        self.save(0)
+
+    def get_result_file(self):
+        return 0

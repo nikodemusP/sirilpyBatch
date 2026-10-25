@@ -16,7 +16,7 @@ class BatchConfig:
     Reads and writes the plugin's on-disk configuration.
 
     Two separate files are involved:
-      * ``sirilpyBatch.yaml``    - user-wide presets, stored in Siril's user data
+      * ``sirilpybatch.yaml``    - user-wide presets, stored in Siril's user data
                                    directory so they survive across projects.
     """
 
@@ -27,9 +27,9 @@ class BatchConfig:
         main = sys.modules["__main__"]
         main_dir = Path(main.__file__).resolve().parent
         cfg_dir = Path(__file__).resolve().parent.parent / "cfg"
-        self.presets_file = main_dir / "sirilpyBatch.yaml"
+        self.presets_file = main_dir / "sirilpybatch.yaml"
         self.global_config_file = cfg_dir / "sirilpyConfig.yaml"
-        self._readConfig()
+        self._read_config()
 
     def get_value(self, key: str, default: Any = None):
         """Resolve values such as telescope.focalLen."""
@@ -42,15 +42,15 @@ class BatchConfig:
                 return default
         return value
 
-    def _readConfig(self):
-        global_config = self._readGlobalConfig() or {}
-        preset_config = self._readPresetConfig() or {}
+    def _read_config(self):
+        global_config = self._read_global_config() or {}
+        preset_config = self._read_preset_config() or {}
         self.config   = {
             **global_config,
             **preset_config,            
         }
 
-    def _readGlobalConfig(self):
+    def _read_global_config(self):
         """Load the shared telescope/sensor configuration."""
         if not self.global_config_file.exists():
             self.siril.log(
@@ -76,11 +76,11 @@ class BatchConfig:
             )
             return {}
 
-    def _readPresetConfig(self):
+    def _read_preset_config(self):
         """Load the user-wide presets file, or None if it doesn't exist yet / fails to parse."""
         self.siril.log(f"read preset config", LogColor.GREEN)
         if not self.presets_file.exists():
-            self.siril.log("Presets file not found: sirilpyBatch.yaml", LogColor.RED)
+            self.siril.log("Presets file not found: sirilpybatch.yaml", LogColor.RED)
             return None
         try:
             with open(self.presets_file, "r") as f:
@@ -91,19 +91,19 @@ class BatchConfig:
             self.siril.log(f"Error reading presets file: {str(e)}", LogColor.RED)
             return None
 
-    def storePresets(self, config):
-        """Persist the user-wide presets dict to ``sirilpyBatch.yaml``."""
+    def store_presets(self, config):
+        """Persist the user-wide presets dict to ``sirilpybatch.yaml``."""
         try:
             # Merge into what is already on disk so keys we weren't handed
             # (anything besides "Batches"/"telescope") are not wiped out.
-            merged = self._readPresetConfig() if self.presets_file.exists() else None
+            merged = self._read_preset_config() if self.presets_file.exists() else None
             merged = dict(merged) if isinstance(merged, dict) else {}
             merged.update(config)
             merged["telescope"] = self.config.get("telescope", {})
             with open(self.presets_file, "w") as f:
                 yaml.safe_dump(merged, f)
             # Re-read only after the file is closed/flushed.
-            self._readConfig()
+            self._read_config()
             self.siril.log("Configuration saved successfully.", LogColor.GREEN)
         except Exception as e:
             self.siril.log(f"Error saving configuration file: {str(e)}", LogColor.RED)
@@ -113,6 +113,13 @@ class BatchConfig:
 
     def selected_telescope_name(self):
         return self.config.get("telescope", {}).get("name", "")
+
+    def project_name(self):
+        return self.config.get("project_name", "")
+
+    def set_project_name(self, name):
+        cleaned_name = str(name or "").strip()
+        self.config["project_name"] = cleaned_name
 
     def set_selected_telescope(self, name):
         selected_telescope = next(
