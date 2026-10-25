@@ -1,9 +1,0 @@
-Batches:
-telescope:
-  filter:
-  - No Filter
-  - No Filter (Broadband)
-  focalLen: 335
-  name: Celestron Origin Smart Mark 2
-  pixelSize: 2.0
-  sensor: Sony IMX678

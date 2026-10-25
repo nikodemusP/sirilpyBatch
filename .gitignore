@@ -1,3 +1,6 @@
 .vscode/**
 ./sirilpybatch.yaml
 __pycache__
+dist
+sirilpybatch.egg-info
+.DS_Store

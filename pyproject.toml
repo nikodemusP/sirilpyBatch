@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sirilpybatch"
 # Keep in sync with sirilpybatch/__init__.py and sirilpybatch/Core/Version.py
-version = "0.1.2"
+version = "0.1.3rc1"
 description = "Drag-and-drop batch processing for Siril, extendable through small plugins."
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -45,7 +45,6 @@ plugins = [
 # via sirilBatch.py (see README.md).
 
 [tool.setuptools]
-py-modules = ["sirilBatch"]
 include-package-data = true
 
 [tool.setuptools.packages.find]
