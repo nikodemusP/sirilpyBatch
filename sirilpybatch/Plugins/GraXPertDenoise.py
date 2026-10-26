@@ -32,10 +32,10 @@ Items:
 class GraXpertDenoisePlugin(BatchPlugin):
 
     def process(self):
-        self.cmd("cd","./process").run()
+        #self.cmd("cd","./process").run()
         # Exchange the file, the GraXpert operates on the original file
         self.save()
-        self.load()
+        #self.load()
         cmd = self.cmd("pyscript", "GraXpert-AI.py", "-denoise")
 
         model = self.get_value("model")

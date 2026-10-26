@@ -60,7 +60,7 @@ class CalibratePlugin(BatchPlugin):
         # ── 1) Convert Lights ─────────────────────────────
         self.context.siril.log(f"[INFO] plade solve", LogColor.GREEN)
 
-        self.cmd("cd","process").run()
+        #self.cmd("cd","process").run()
 
         if self.get_value("plade"):
             self.cmd("platesolve").run()

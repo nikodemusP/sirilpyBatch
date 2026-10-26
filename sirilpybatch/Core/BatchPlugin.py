@@ -185,7 +185,7 @@ class BatchPlugin:
                 self.load()
         except Exception as e:
             self.context.siril.log(f"Error during execution: {e}", LogColor.RED)
-        self.cmd("cd", self.context.work_dir).run()
+        #self.cmd("cd", self.context.work_dir).run()
     
     def _on_process(self):
         set_batch_command_output(self.context.siril.cmd)

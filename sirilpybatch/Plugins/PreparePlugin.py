@@ -301,6 +301,8 @@ class FrameTableItem(PluginItem):
         table = getattr(widget, "table", widget)
         rows = list(value or [])
         table.setRowCount(len(rows))
+        selected_row = None
+
         for r, row in enumerate(rows):
             if isinstance(row, dict):
                 cells, highlight = row.get("cells", []), bool(row.get("highlight"))
@@ -308,6 +310,10 @@ class FrameTableItem(PluginItem):
                 tooltip = row.get("tooltip")
             else:
                 cells, highlight, marker, selected, tooltip = row, False, "", False, None
+
+            if selected:
+                selected_row = r
+
             for c, cell in enumerate(cells):
                 text = (f"{marker} " if marker and c == 0 else "") + str(cell)
                 entry = QTableWidgetItem(text)
@@ -322,7 +328,13 @@ class FrameTableItem(PluginItem):
                 if tooltip:
                     entry.setToolTip(tooltip)
                 table.setItem(r, c, entry)
+
         self._fit_height(table, len(rows))
+
+        if selected_row is not None and table.rowCount():
+            item = table.item(selected_row, 0)
+            if item is not None:
+                table.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtCenter)
 
         if hasattr(widget, "delete_button"):
             has_selection = any(isinstance(r, dict) and r.get("selected") for r in rows)
@@ -936,6 +948,18 @@ class CalibratePlugin(BatchPlugin):
             self.cmd("stack", key, "rej", str(low), str(high), "-nonorm").add_arg("-out={}", master).run()
         return master
 
+    def _sigma_range(self):
+        value = self.get_value("sigma")
+        if isinstance(value, str):
+            parts = [p.strip() for p in value.replace(",", " ").split()]
+            if len(parts) >= 2:
+                value = parts[:2]
+        try:
+            low, high = value
+            return int(low), int(high)
+        except Exception:
+            return 3, 3
+    
     def process(self):
         siril = self.context.siril
         light_files, selection = self._plan_calibration()
@@ -977,13 +1001,14 @@ class CalibratePlugin(BatchPlugin):
         # ── 4) register ─────────────────────────────
         self.cmd("register", "pp_light").run()
         # ── 5) stack the images ─────────────────────────────
+        low, high = self._sigma_range()
         (
             self.cmd(
                 "stack",
                 "r_pp_light",
                 "rej",
-                "3",
-                "3",
+                f"{low}",
+                f"{high}",
                 "-norm=addscale",
                 "-output_norm",
                 "-rgb_equal",

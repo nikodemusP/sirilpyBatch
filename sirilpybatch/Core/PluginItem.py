@@ -7,7 +7,9 @@ from typing import Any, Callable, Optional, Type
 
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QLineEdit,
+    QRadioButton,
     QSlider,
     QWidget,
     QHBoxLayout,
@@ -384,6 +386,44 @@ class FloatRangeItem(_RangeItem):
         spinbox.setDecimals(int(self.decimals))
         return spinbox
 
+@dataclass
+class RadioItem(PluginItem):
+    values: list[Any] = field(default_factory=list)
+
+    def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        widget.button_group = QButtonGroup(widget)
+        widget.buttons = {}
+
+        default = resolve_config_value(self.default, context)
+        for value in resolve_config_value(self.values, context) or []:
+            button = QRadioButton(str(value))
+            widget.button_group.addButton(button)
+            widget.buttons[button] = value
+            layout.addWidget(button)
+            button.setChecked(value == default)
+
+        return widget
+
+    def bind_widget(self, widget, callback):
+        for button, value in widget.buttons.items():
+            button.toggled.connect(
+                lambda checked, item_value=value, key=self.key:
+                    callback(item_value, key) if checked else None
+            )
+
+    def get_value(self, widget):
+        for button, value in widget.buttons.items():
+            if button.isChecked():
+                return value
+        return None
+
+    def set_value(self, widget, value):
+        for button, item_value in widget.buttons.items():
+            button.setChecked(item_value == value)
 
 ITEM_TYPES: dict[str, Type[PluginItem]] = {
     "checkbox": CheckboxItem,
@@ -402,6 +442,7 @@ ITEM_TYPES: dict[str, Type[PluginItem]] = {
     "range": IntRangeItem,
     "intrange": IntRangeItem,
     "floatrange": FloatRangeItem,
+    "radio": RadioItem,
 }
 
 

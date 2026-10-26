@@ -38,7 +38,7 @@ Items:
 class GreenNoisePlugin(BatchPlugin):
 
     def process(self):
-        self.cmd("cd","./process").run()
+        #self.cmd("cd","./process").run()
         green_type = self.get_value("type")
         cmd = self.cmd("rmgreen")
         cmd.add_opt("-nopreserve", self.get_value("nopreserve"))
