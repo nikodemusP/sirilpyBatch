@@ -7,7 +7,7 @@ Every processing step is a small **plugin**: one Python file plus a short YAML b
 ## Features
 
 - Drag-and-drop batch builder (PyQt6), with reordering (▲ ▼) and removal (✕) of steps
-- Per-plugin settings generated from YAML: checkboxes, combo boxes, numbers, sliders, text, ranges
+- Per-plugin settings generated from YAML: checkboxes, combo boxes, numbers, sliders, text, file/directory pickers, ranges
 - Run a single step (**Process** / **Load** buttons) or the whole batch (**Run**)
 - Named batch presets, saved to and loaded from a YAML file
 - Telescope / sensor / filter profiles that plugins can read (e.g. to drive SPCC)
@@ -47,7 +47,7 @@ To keep a batch, type a name in the (editable) **Batch** selector and press **Sa
 | Button | Where | What it does |
 | --- | --- | --- |
 | **Process** | on a plugin | Runs just that plugin (shown only if the plugin implements `process()`) |
-| **Load** | on a plugin | Loads that plugin's result into Siril (shown only if it implements `load()`) |
+| **Load** | on a plugin | Loads that plugin's selected image or result into Siril (shown if it implements `load()` or `get_result_file()`) |
 | ▲ ▼ ✕ | next to a plugin | Move up / move down / remove from the batch |
 | **Save Presets** | footer | Stores the current plugin list and settings under the selected batch name |
 | **Run** | footer | Runs all plugins in order |
@@ -61,7 +61,7 @@ For each plugin, top to bottom:
 
 1. `process()` is executed. An exception is logged in red in Siril's log and the batch **continues** with the next plugin.
 2. Siril's working directory is reset to where it was before the plugin ran, so every plugin starts in the project root.
-3. If the plugin implements `load()`, it is called so the result shows up in Siril right away.
+3. If the plugin implements `load()` or `get_result_file()`, its load action runs so the selected image or result shows up in Siril right away.
 
 ## Working directory layout
 
@@ -75,6 +75,7 @@ There is no specific working-directory. The sirilpybatch creates a process direc
 | **Color Calibration** | `color_calibration` | Works in `process/`. Optional plate solving, optional PCC (catalogue: none / apass / localgaia / gaia / nomad; *Tolerance* is used as `-bgtol` when the catalogue is `none`) and optional SPCC. SPCC takes the sensor from the selected telescope and the filter from the *Filter* combo. Saves the result as `result_calibration`. |
 | **GraXPert Background Extractionn** | `graxpert_bge` | GraXPert background extraction
 | **GraXPert Denoisen** | `graxpert_denoise` | Denoise Fits
+| **Load Image** | `load_image` | Selects and loads an image file into Siril. |
 
 Todos
 

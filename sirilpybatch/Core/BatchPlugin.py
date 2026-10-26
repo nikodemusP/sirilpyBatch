@@ -27,8 +27,8 @@ class BatchPlugin:
       * ``load()`` runs a lighter "preview/load only" action.
       * Returning ``False`` from ``process()`` skips the automatic post-process load.
     Whether the "Process" and/or "Load" buttons are shown is decided
-    automatically in ``create_plugin_box`` based on which of these methods
-    a subclass actually overrides.
+    automatically in ``create_plugin_box`` based on which action methods a
+    subclass overrides.
     """
 
     def __init__(self, siril: Any, config: BatchConfig ):
@@ -68,7 +68,7 @@ class BatchPlugin:
         and wires those buttons to ``_on_process``/``_on_load``.
         """
         has_process = type(self).process is not BatchPlugin.process
-        has_load = type(self).get_result_file is not BatchPlugin.get_result_file
+        has_load = self._has_load_action()
 
         self._resolve_callbacks()
 
@@ -103,6 +103,13 @@ class BatchPlugin:
                     f"{type(self).__name__}",
                     LogColor.RED,
                 )
+
+    def _has_load_action(self) -> bool:
+        """Return whether this plugin has a custom loader or a result-file selector."""
+        return (
+            type(self).load is not BatchPlugin.load
+            or type(self).get_result_file is not BatchPlugin.get_result_file
+        )
 
     def load(self):
         idx = self.get_result_file()
@@ -171,7 +178,7 @@ class BatchPlugin:
         (if defined) so the result is immediately reflected in the UI.
         """
         self.cmd("cd", self.context.work_dir).run()
-        has_load = type(self).load is not BatchPlugin.load
+        has_load = self._has_load_action()
         try:
             self.original_image = None
             if self.siril().is_image_loaded():
@@ -193,7 +200,11 @@ class BatchPlugin:
 
     def _on_load(self):
         """Handler for the "Load" button."""
-        self.load()
+        set_batch_command_output(self.context.siril.cmd)
+        try:
+            self.load()
+        except Exception as error:
+            self.context.siril.log(f"Error while loading: {error}", LogColor.RED)
 
     def process(self):
         """Override to implement the plugin's main batch action. No-op by default."""

@@ -266,6 +266,71 @@ class DirectoryItem(PluginItem):
 
 
 @dataclass
+class FileItem(PluginItem):
+    """Text field holding a file path plus a button that opens a file dialog."""
+    dialog_title: str = "Select file"
+    button_text: str = "…"
+    name_filter: str = "All files (*)"
+
+    _SETTINGS = ("sirilpybatch", "sirilpybatch")
+    _LAST_KEY = "FileItem/lastDirectory"
+
+    @classmethod
+    def last_directory(cls) -> str:
+        value = str(QSettings(*cls._SETTINGS).value(cls._LAST_KEY, "") or "")
+        return value if os.path.isdir(value) else ""
+
+    @classmethod
+    def remember_directory(cls, path: str):
+        QSettings(*cls._SETTINGS).setValue(cls._LAST_KEY, os.path.dirname(path))
+
+    def create_widget(self, context: Optional[BatchContext] = None) -> QWidget:
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        widget.edit = QLineEdit()
+        widget.button = QPushButton(self.button_text)
+        widget.button.setToolTip(self.dialog_title)
+        widget.button.setFixedWidth(30)
+
+        resolved_default = resolve_config_value(self.default, context)
+        if resolved_default is not None:
+            widget.edit.setText(str(resolved_default))
+
+        def browse():
+            current_path = widget.edit.text().strip()
+            start = (
+                os.path.dirname(current_path)
+                if os.path.isfile(current_path)
+                else self.last_directory()
+            )
+            path, _ = QFileDialog.getOpenFileName(
+                widget, self.dialog_title, start or os.path.expanduser("~"), self.name_filter
+            )
+            if path:
+                widget.edit.setText(path)
+                self.remember_directory(path)
+
+        widget.button.clicked.connect(browse)
+        layout.addWidget(widget.edit, 1)
+        layout.addWidget(widget.button)
+        return widget
+
+    def bind_widget(self, widget, callback):
+        widget.edit.textChanged.connect(
+            lambda value, key=self.key: callback(value, key)
+        )
+
+    def get_value(self, widget):
+        return widget.edit.text()
+
+    def set_value(self, widget, value):
+        widget.edit.setText("" if value is None else str(value))
+
+
+@dataclass
 class ComboBoxItem(PluginItem):
     values: list[Any] = field(default_factory=list)
 
@@ -435,6 +500,7 @@ ITEM_TYPES: dict[str, Type[PluginItem]] = {
     "directory": DirectoryItem,
     "dir": DirectoryItem,
     "folder": DirectoryItem,
+    "file": FileItem,
     "int": IntItem,
     "integer": IntItem,
     "float": FloatItem,
