@@ -56,7 +56,7 @@ class BatchPlugin:
         self.columns = columns
         self.target_names = list(target_names or [])
         self.context.plugin_config = plugin_config if plugin_config is not None else {}
-        self.context.siril.log(f"setup plugin: {self.title}", LogColor.GREEN)
+        # self.context.siril.log(f"setup plugin: {self.title}", LogColor.GREEN)
 
 
     def create_plugin_box(self):
@@ -139,7 +139,7 @@ class BatchPlugin:
                 f"target name index {idx} out of range for {len(self.target_names)} target name(s)"
             )
 
-        project_name = str(self.get_config("project_name", "") or "").strip()
+        project_name = str(self.context.config.get_value("Preferences.project_name", "") or "").strip()
         if not project_name:
             project_name = os.path.basename(os.path.normpath(self.get_siril_wd()))
 

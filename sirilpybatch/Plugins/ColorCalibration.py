@@ -41,7 +41,7 @@ Items:
     - ComboBox:
         Key: spcc_filter
         Label: Filter
-        Values: "@telescope.filter"
+        Values: "@Preferences.telescope.filter"
         Default: No Filter
     - FloatRange:
         Key: spcc_bgtol
@@ -85,7 +85,7 @@ class CalibratePlugin(BatchPlugin):
         filter_cfg = self.get_config(f"filterCfg.{filter}",'-oscfilter=No filter')
         (
             self.cmd("spcc")
-            .add_arg("-oscsensor={}",self.get_config("telescope.sensor",""))
+            .add_arg("-oscsensor={}",self.get_config("Preferences.telescope.sensor",""))
             .add_arg("{}",filter_cfg)
             .add_arg("-bgtol={},{}",self.get_value("spcc_bgtol"))
             .run()

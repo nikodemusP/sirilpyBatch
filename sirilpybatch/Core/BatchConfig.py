@@ -22,17 +22,27 @@ class BatchConfig:
 
     def __init__(self, siril):
         self.siril = siril
-        #config_dir = Path(siril.get_siril_userdatadir())
-        #config_dir.mkdir(parents=True, exist_ok=True)
+        # Read the global config 
+        cfg_dir = Path(__file__).resolve().parent.parent / "cfg"
+        self.global_config_file = cfg_dir / "sirilpyConfig.yaml"
+        self.config = self._read_file(self.global_config_file) or {}
+        self.siril.log(
+                "Global configuration loaded successfully.",
+                LogColor.GREEN,
+            )
+
+        # Read the user-wide presets from the same directory as the main script.
         main = sys.modules["__main__"]
         main_dir = Path(main.__file__).resolve().parent
-        cfg_dir = Path(__file__).resolve().parent.parent / "cfg"
-        self.presets_file = main_dir / "sirilpybatch.yaml"
-        self.global_config_file = cfg_dir / "sirilpyConfig.yaml"
-        self._read_config()
+        self.config_file = main_dir / "sirilpybatch.yaml"
+        self.presets = self._read_file(self.config_file) or {}
+        self.siril.log(
+                "User presets loaded successfully.",
+                LogColor.GREEN,
+            )
 
-    def get_value(self, key: str, default: Any = None):
-        """Resolve values such as telescope.focalLen."""
+    def cfg(self, key: str, default: Any = None):
+        """Resolve values using dotted paths into the merged configuration."""
         value: Any = self.config
         for part in key.split("."):
             if not isinstance(value, dict):
@@ -41,95 +51,55 @@ class BatchConfig:
             if value is None:
                 return default
         return value
+    
+    def get_value(self, key: str, default: Any = None):
+        """Resolve values using dotted paths into the merged configuration."""
+        value: Any = self.presets
+        for part in key.split("."):
+            if not isinstance(value, dict):
+                return default
+            value = value.get(part)
+            if value is None:
+                return default
+        return value
 
-    def _read_config(self):
-        global_config = self._read_global_config() or {}
-        preset_config = self._read_preset_config() or {}
-        self.config   = {
-            **global_config,
-            **preset_config,            
-        }
+    def set_value(self, key: str, value: Any):
+        """Set a value in the presets using a dotted path, creating nested mappings."""
+        parts = key.split(".")
+        if not key or any(not part for part in parts):
+            raise ValueError("Configuration key must contain non-empty path components")
 
-    def _read_global_config(self):
-        """Load the shared telescope/sensor configuration."""
-        if not self.global_config_file.exists():
-            self.siril.log(
-                f"Global config not found: {self.global_config_file}",
-                LogColor.RED,
-            )
+        target = self.presets
+        for part in parts[:-1]:
+            current = target.get(part)
+            if current is None:
+                current = {}
+                target[part] = current
+            if not isinstance(current, dict):
+                raise TypeError(f"Configuration path '{part}' is not a mapping")
+            target = current
+        target[parts[-1]] = value
+
+    def _read_file(self, file_path: Path):
+        """Load the user-wide presets."""
+        if not file_path.exists():
             return {}
-
         try:
-            with open(self.global_config_file, "r", encoding="utf-8") as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 config = yaml.safe_load(file)
-
-            self.siril.log(
-                "Global configuration loaded successfully.",
-                LogColor.GREEN,
-            )
             return config if isinstance(config, dict) else {}
-
         except Exception as error:
             self.siril.log(
-                f"Error reading global config: {error}",
+                f"Error reading file {file_path}: {error}",
                 LogColor.RED,
             )
             return {}
 
-    def _read_preset_config(self):
-        """Load the user-wide presets file, or None if it doesn't exist yet / fails to parse."""
-        self.siril.log(f"read preset config", LogColor.GREEN)
-        if not self.presets_file.exists():
-            self.siril.log("Presets file not found: sirilpybatch.yaml", LogColor.RED)
-            return None
-        try:
-            with open(self.presets_file, "r") as f:
-                presets = yaml.safe_load(f)
-                self.siril.log("Presets loaded successfully.", LogColor.GREEN)
-                return presets
-        except Exception as e:
-            self.siril.log(f"Error reading presets file: {str(e)}", LogColor.RED)
-            return None
-
-    def store_presets(self, config):
+    def store_presets(self):
         """Persist the user-wide presets dict to ``sirilpybatch.yaml``."""
         try:
-            # Merge into what is already on disk so keys we weren't handed
-            # (anything besides "Batches"/"telescope") are not wiped out.
-            merged = self._read_preset_config() if self.presets_file.exists() else None
-            merged = dict(merged) if isinstance(merged, dict) else {}
-            merged.update(config)
-            merged["telescope"] = self.config.get("telescope", {})
-            with open(self.presets_file, "w") as f:
-                yaml.safe_dump(merged, f)
-            # Re-read only after the file is closed/flushed.
-            self._read_config()
+            with open(self.config_file, "w") as f:
+                yaml.safe_dump(self.presets, f)
             self.siril.log("Configuration saved successfully.", LogColor.GREEN)
         except Exception as e:
             self.siril.log(f"Error saving configuration file: {str(e)}", LogColor.RED)
-
-    def telescope_list(self):
-        return self.config.get("telescopes", [])
-
-    def selected_telescope_name(self):
-        return self.config.get("telescope", {}).get("name", "")
-
-    def project_name(self):
-        return self.config.get("project_name", "")
-
-    def set_project_name(self, name):
-        cleaned_name = str(name or "").strip()
-        self.config["project_name"] = cleaned_name
-
-    def set_selected_telescope(self, name):
-        selected_telescope = next(
-            (
-                telescope
-                for telescope in self.telescope_list()
-                if telescope.get("name") == name
-            ),
-            None,
-        )
-
-        if selected_telescope is not None:
-            self.config["telescope"] = deepcopy(selected_telescope)

@@ -2,6 +2,7 @@
 # Copyright (C) 2026 Nikolas Pommerening
 # Contact: nikodemus.p@gmx.at
 #
+from copy import deepcopy
 from dataclasses import dataclass
 import os
 import shutil
@@ -272,10 +273,10 @@ class PluginContainer(QWidget):
 
         self._rebuild_layout()
 
-        self.siril.log(
-            f"Added plugin: {entry.title}",
-            LogColor.GREEN,
-        )
+        # self.siril.log(
+        #     f"Added plugin: {entry.title}",
+        #     LogColor.GREEN,
+        # )
 
         return instance
 
@@ -629,12 +630,8 @@ class Batch(QMainWindow):
             self.initialization_successful = False
             return
         
-        self.siril.log(f"read config", LogColor.GREEN)
         self.config = BatchConfig(self.siril)
 
-        # Load the plugins
-        self.siril.log(f"load plugins", LogColor.GREEN)
-        
         self.create_window()
 
         self.initialization_successful = True
@@ -685,7 +682,7 @@ class Batch(QMainWindow):
         cwd_label.setWordWrap(True)
         info_layout.addWidget(cwd_label)
 
-        project_name = self.config.project_name()
+        project_name = self.config.get_value("Preferences.project_name", "").strip()
         if not project_name and workdir:
             project_name = os.path.basename(os.path.normpath(workdir))
 
@@ -697,18 +694,18 @@ class Batch(QMainWindow):
 
         self.telescope_combo = QComboBox(info_box)
 
-        telescopes = self.config.telescope_list()
+        telescopes = self.config.cfg("telescopes", [])
         self.telescope_combo.addItems(
             [telescope["name"] for telescope in telescopes]
         )
 
-        selected = self.config.selected_telescope_name()
+        selected = self.config.get_value("Preferences.telescope.name", "")
         index = self.telescope_combo.findText(selected)
         if index >= 0:
             self.telescope_combo.setCurrentIndex(index)
 
         def on_telescope_changed(name):
-            self.config.set_selected_telescope(name)
+            self._set_selected_telescope(name)
             self.plugin_container.refresh_plugin_widgets()
 
         self.telescope_combo.currentTextChanged.connect(on_telescope_changed)
@@ -779,7 +776,21 @@ class Batch(QMainWindow):
 
     def _on_project_name_changed(self, name: str):
         """Persist the current project name into the batch config."""
-        self.config.set_project_name(name)
+        self.config.set_value("Preferences.project_name", name)
+
+    def _set_selected_telescope(self, name: str):
+        selected_telescope = next(
+            (
+                telescope
+                for telescope in self.config.cfg("telescopes", [])
+                if telescope.get("name") == name
+            ),
+            None,
+        )
+
+        if selected_telescope is not None:
+            self.config.set_value("Preferences.telescope", deepcopy(selected_telescope))
+        self.config.set_value("Preferences.telescope.name", name)
 
     def _cleanup_process_directory(self):
         """Delete and recreate the Siril working directory's process folder."""
@@ -897,24 +908,24 @@ class Batch(QMainWindow):
             self.siril.log("Cannot save a batch with an empty name", LogColor.RED)
             return
 
-        if name == "empty":
+        entries = [
+            {"plugin": item["key"], "config": item["config"]}
+            for item in self.plugin_container.get_config()
+        ]
+
+        if name == "empty" and len(entries) > 0:
             self.siril.log(
                 '"empty" is reserved for an empty batch and cannot be overwritten',
                 LogColor.RED,
             )
             return
 
-        entries = [
-            {"plugin": item["key"], "config": item["config"]}
-            for item in self.plugin_container.get_config()
-        ]
-
         batches = self.config.get_value("Batches", {})
         is_new = name not in batches
-        batches[name] = entries
 
-        self.config.store_presets({"Batches": batches})
-
+        self.config.set_value("Preferences.project_name", "")
+        self.config.set_value(f"Batches.{name}", entries)
+        self.config.store_presets()
         if is_new:
             self.batch_combo.addItem(name)
 
@@ -924,10 +935,11 @@ class Batch(QMainWindow):
         self.batch_combo.setCurrentText(name)
         self.batch_combo.blockSignals(False)
 
-        self.siril.log(
-            f"Batch '{name}' {'created' if is_new else 'updated'} and saved",
-            LogColor.GREEN,
-        )
+        if name != "empty":
+            self.siril.log(
+                f"Batch '{name}' {'created' if is_new else 'updated'} and saved",
+                LogColor.GREEN,
+            )
 
     def _run_batch(self):
         """Run every plugin instance sequentially."""

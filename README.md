@@ -101,22 +101,27 @@ telescopes:
     filter: ['No Filter (Broadband)', 'LP (Narrowband)']   # offered by "@telescope.filter"
 ```
 
-To support another instrument, add an entry under `telescopes:`. If it uses a filter that isn't listed in `filterCfg:` yet, add that too. Selecting a telescope in the UI copies its entry to the `telescope` key, and plugin boxes are rebuilt so that any `@telescope.…` lists update.
+To support another instrument, add an entry under `telescopes:`. If it uses a filter that isn't listed in `filterCfg:` yet, add that too. Selecting a telescope in the UI copies its entry to `Preferences.telescope`, and plugin boxes are rebuilt so that any `@Preferences.telescope.…` lists update.
 
 ### Presets (`sirilpybatch.yaml`)
 
-Created next to `sirilBatch.py` the first time you press **Save Presets**. It stores your batches and the selected telescope:
+Created next to `sirilBatch.py` the first time you press **Save Presets**. It stores batch presets separately from user preferences (`project_name` and the selected telescope):
 
 ```yaml
+Preferences:
+  project_name: Seestar
+  telescope:
+    name: ZWO Seestar S50
+    sensor: Sony IMX585
+    focalLen: 250
+    pixelSize: 2.9
+    filter: [No Filter (Broadband), LP (Narrowband)]
 Batches:
   seestar_default:
     - plugin: calibrate
       config: {cfa: false, equalize_cfa: false, debayer: true, sigma: [3, 3]}
     - plugin: color_calibration
       config: {plade: true, pcc: false, spcc: true, spcc_filter: LP (Narrowband), ...}
-telescope:
-  name: ZWO Seestar S50
-  ...
 ```
 
 Global and preset files are merged **per top-level key**, with the preset file winning. Settings are stored under each item's `Key`, so renaming a `Key` in a plugin means old presets no longer restore that value (unknown keys are ignored).
@@ -207,7 +212,7 @@ Options common to all items:
 
 Defaults when omitted: `Min` 0, `Max` 100, `Step` 1, `Decimals` 2.
 
-**Values from the config.** A value starting with `@` is looked up in the merged configuration using a dotted path, e.g. `Values: "@telescope.filter"` fills a combo box with the filters of the selected telescope. This works for `Values`, `Default`, `Min` and `Max`. Quote it, since YAML doesn't allow an unquoted `@`.
+**Values from the config.** A value starting with `@` is looked up in the merged configuration using a dotted path, e.g. `Values: "@Preferences.telescope.filter"` fills a combo box with the filters of the selected telescope. This works for `Values`, `Default`, `Min` and `Max`. Quote it, since YAML doesn't allow an unquoted `@`.
 
 ### What a plugin can use
 
