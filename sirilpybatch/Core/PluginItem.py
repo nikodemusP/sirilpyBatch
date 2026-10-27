@@ -74,6 +74,7 @@ class PluginItem:
     
 @dataclass
 class SeparatorItem(PluginItem):
+    save: bool = False  # separators don't have a value to save
     def create_widget(self, context: Optional[BatchContext] = None):
         return None
 

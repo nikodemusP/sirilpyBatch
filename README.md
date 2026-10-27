@@ -209,8 +209,10 @@ Options common to all items:
 | `Default` | Initial value. Ranges accept `3,3` or `[3, 3]` |
 | `Tooltip` | Hover text |
 | `ColSpan` | Number of grid columns the control occupies (default `1`) |
+| `SaveValue` | Whether the value is included in saved plugin configuration (default `true`) |
 
 Defaults when omitted: `Min` 0, `Max` 100, `Step` 1, `Decimals` 2.
+When `SaveValue` is `false`, the item is omitted from `widget.get_config()` and its saved value is not restored.
 
 **Values from the config.** A value starting with `@` is looked up in the merged configuration using a dotted path, e.g. `Values: "@Preferences.telescope.filter"` fills a combo box with the filters of the selected telescope. This works for `Values`, `Default`, `Min` and `Max`. Quote it, since YAML doesn't allow an unquoted `@`.
 

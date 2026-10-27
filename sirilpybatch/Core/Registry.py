@@ -45,7 +45,12 @@ def _load_yaml(spec: Any, source: str) -> Any:
     except yaml.YAMLError as error:
         raise ValueError(f"{source}: invalid YAML: {error}") from error
 # Short spellings accepted in YAML -> real dataclass field name.
-_OPTION_ALIASES = {"min": "minimum", "max": "maximum", "labelposition": "label_pos"}
+_OPTION_ALIASES = {
+    "min": "minimum",
+    "max": "maximum",
+    "labelposition": "label_pos",
+    "savevalue": "save",
+}
 
 def _build_item(type_name: Any, options: Any, where: str) -> PluginItem:
     """Create one PluginItem from its YAML type name and options mapping."""

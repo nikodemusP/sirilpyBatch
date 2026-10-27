@@ -21,6 +21,7 @@ Items:
         DialogTitle: Select image to load
         NameFilter: "Image files (*.fit *.fits *.fts *.xisf *.tif *.tiff *.png *.jpg *.jpeg *.bmp);;All files (*)"
         colspan: 6
+        SaveValue: False
 """
 
 

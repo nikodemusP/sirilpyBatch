@@ -241,7 +241,7 @@ class PluginBox(QGroupBox):
     def get_config(self) -> dict[str, Any]:
         cfg: dict[str, Any] = {}
         for item in self.items:
-            if isinstance(item, SeparatorItem) or not item.save:
+            if not item.save or item.key is None:
                 continue
             cfg[item.key] = self.get_value(item.key)
         return cfg

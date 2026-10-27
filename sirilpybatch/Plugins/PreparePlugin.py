@@ -37,8 +37,8 @@ from sirilpybatch import (
 
 PLUGIN_CONFIG = """
 Plugin:
-    Key: calibrate
-    Title: Prepare
+    Key: stack_calibration
+    Title: Stack Calibration
     targetName: ["stacked"]
 Box:
     Columns: 6
@@ -47,9 +47,11 @@ Items:
         Key: lights_dirs
         colspan: 6
         on_change: frame_dirs_changed
+        SaveValue: False
     - FrameTable:
         Key: lights_table
         colspan: 6
+        SaveValue: False
     - FrameDir:
         Key: frame_dirs
         colspan: 6
